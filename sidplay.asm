@@ -14,8 +14,8 @@
 ; A $D000-$DFFF tartomány I/O: a $D400-$D7FF írása a SID-be megy, az olvasás
 ; egy árnyéklapról jön (OSC3/ENV3 képkockánként frissítve a kártyáról).
 ;
-; Fájlnév megadása: "zene" (a .sid kiterjesztést hozzáteszi), "zene.sid",
-; vagy "zene,3" (a 3. dal). Üres sor: vissza a BASIC-be.
+; Fájlválasztó: fel/le (balra/jobbra: lapozás), Enter: lejátszás vagy belépés
+; a könyvtárba, D: másik meghajtó, ESC: vissza a BASIC-be.
 ; ============================================================================
 
 P_PAGING    equ 02h
@@ -178,25 +178,7 @@ main:
             ld (buf_limit + 1), a
             xor a
             ld (buf_limit), a
-            ld hl, s_title
-            call prstr
-.loop:      call list_dir
-            ld hl, s_prompt
-            call prstr
-            call read_line
-            jr z, .quit
-            call parse_name
-            call load_file
-            jr c, .loop
-.play:      call play_file
-            ld a, l
-            cp 5                    ; dalváltás: újra beolvassuk a fájlt
-            jr nz, .loop
-            call load_file
-            jr c, .loop
-            jr .play
-.quit:      ld hl, 0
-            ret
+            jp browser
 
 ; ---- egy beolvasott .sid lejátszása (sidbuf .. sidend) ----------------------
 play_file:
@@ -431,16 +413,21 @@ play_file:
 .keys:      ld a, (cia_dirty)       ; a zene átírta a CIA időzítőt
             or a
             call nz, timer_update
-            ld hl, key_cnt          ; a billentyűk csak minden 8. hívásnál
-            dec (hl)
+            ld hl, key_cnt          ; ESC/SPACE minden 2., a dalválasztók minden
+            dec (hl)                ; 8. hívásnál (a billentyűolvasás is idő)
+            bit 0, (hl)
             jp nz, .frame
-            ld (hl), 8
             call read_keys
             cp KEYMASK
             jr nz, .esc
+            ld hl, key_cnt
+            ld a, (hl)
+            or a
+            jp nz, .frame
+            ld (hl), 8
             call read_song_key      ; számbillentyű / nyilak: másik dal
             or a
-            jr z, .frame
+            jp z, .frame
             ld hl, songs
             cp (hl)
             jr z, .sok
@@ -1229,8 +1216,399 @@ put_handle: call io_on
             ldir
             jp io_off
 
-; az aktuális könyvtár .sid fájljainak kiírása
-list_dir:   call io_on
+; ---- fájlválasztó ---------------------------------------------------------
+; A lista a sidbuf-ban: ENT_SIZE bájtos elemek (0: 1 = könyvtár, 1..: a név,
+; 0-val zárva). Az első elem mindig a "..". A lejátszás felülírja, utána
+; újraolvassuk.
+ENT_SIZE    equ 48
+ENT_MAX     equ 250
+LIST_ROW    equ 3               ; a lista első sora a képernyőn
+LIST_ROWS   equ 20
+NAME_COLS   equ 28
+K_UP        equ 1
+K_DOWN      equ 2
+K_LEFT      equ 3
+K_RIGHT     equ 4
+K_ENTER     equ 5
+K_ESC       equ 6
+K_DRIVE     equ 7
+
+browser:    xor a
+            ld (cur), a
+.rescan:    call scan_dir
+            ld a, (ent_count)       ; a kurzor a listán belül
+            dec a
+            ld hl, cur
+            cp (hl)
+            jr nc, .draw
+            ld (hl), a
+.draw:      call calc_top
+            ld (top), a
+            call draw_all
+            call wait_release
+            xor a
+            ld (last_key), a
+.loop:      halt
+            call get_key
+            ld hl, last_key
+            cp (hl)
+            jr z, .same
+            ld (hl), a
+            ld hl, key_rep
+            ld (hl), 15             ; az ismétlés késleltetése
+            jr .act
+.same:      cp K_UP                 ; csak a fel/le ismétlődik
+            jr z, .rep
+            cp K_DOWN
+            jr nz, .loop
+.rep:       ld hl, key_rep
+            dec (hl)
+            jr nz, .loop
+            ld (hl), 3
+.act:       or a
+            jr z, .loop
+            cp K_ESC
+            jr z, .quit
+            cp K_ENTER
+            jr z, .enter
+            cp K_DRIVE
+            jr z, .drive
+            ld c, a                 ; mozgás: az új kurzor A-ba
+            ld a, (ent_count)
+            dec a
+            ld b, a                 ; B = az utolsó elem
+            ld a, (cur)
+            dec c
+            jr nz, .n1
+            or a                    ; fel
+            jr z, .loop
+            dec a
+            jr .move
+.n1:        dec c
+            jr nz, .n2
+            cp b                    ; le
+            jr nc, .loop
+            inc a
+            jr .move
+.n2:        dec c
+            jr nz, .n3
+            sub LIST_ROWS           ; balra: egy lappal feljebb
+            jr nc, .move
+            xor a
+            jr .move
+.n3:        add a, LIST_ROWS        ; jobbra: egy lappal lejjebb
+            jr c, .last
+            cp b
+            jr c, .move
+.last:      ld a, b
+.move:      ld hl, cur
+            cp (hl)
+            jr z, .loop
+            ld c, (hl)              ; C = a régi kurzor
+            ld (hl), a
+            call calc_top
+            ld hl, top
+            cp (hl)
+            jr z, .mark
+            ld (hl), a              ; másik lap: újrarajzolás
+            call draw_all
+            jp .loop
+.mark:      ld a, c                 ; ugyanaz a lap: csak a jelölő
+            ld e, ' '
+            call draw_mark
+            ld a, (cur)
+            ld e, '>'
+            call draw_mark
+            jp .loop
+.quit:      call cls
+            ld hl, 0
+            ret
+.drive:     ld a, REG_DRIVE         ; a következő meghajtó: USB, PSRAM, flash
+            call reg_read
+            inc a
+            cp 3
+            jr c, .dok
+            xor a
+.dok:       ld b, a
+            ld a, REG_DRIVE
+            call reg_write
+            jp browser
+.enter:     call cur_entry          ; HL = az elem
+            ld a, (hl)
+            inc hl
+            or a
+            jr z, .file
+            call set_name           ; könyvtár: belépünk
+            call io_on
+            ld hl, name_len
+            ld de, IO_PARAM
+            ld a, (hl)
+            inc a
+            ld c, a
+            ld b, 0
+            ldir
+            call io_off
+            ld a, 0Ch               ; MSC_CHDIR
+            call card_cmd
+            jp browser
+.file:      call set_name
+            xor a
+            ld (song_req), a
+.load:      call cls
+            call load_file
+            jr c, .err
+            call play_file
+            ld a, l
+            cp 5                    ; dalváltás: újra beolvassuk a fájlt
+            jr z, .load
+            or a
+            jp z, .rescan
+.err:       ld hl, s_anykey         ; hiba: az üzenet a képernyőn marad
+            call prstr
+            call wait_release
+.wk:        halt
+            call get_key
+            or a
+            jr z, .wk
+            jp .rescan
+
+; a HL-en kezdődő (0-végű) név -> namebuf, name_len
+set_name:   ld de, namebuf
+            ld b, 0
+.l:         ld a, (hl)
+            ld (de), a
+            or a
+            jr z, .e
+            inc hl
+            inc de
+            inc b
+            jr .l
+.e:         ld a, b
+            ld (name_len), a
+            ret
+
+; HL = a kurzor alatti elem; cur_entry / A. elem: nth_entry
+cur_entry:  ld a, (cur)
+nth_entry:  ld l, a
+            ld h, 0
+            add hl, hl
+            add hl, hl
+            add hl, hl
+            add hl, hl              ; * 16
+            ld d, h
+            ld e, l
+            add hl, hl
+            add hl, de              ; * 48
+            assert ENT_SIZE == 48
+            ld de, sidbuf
+            add hl, de
+            ret
+
+; A = a kurzor lapjának első eleme
+calc_top:   ld a, (cur)
+            ld b, 0
+.l:         sub LIST_ROWS
+            jr c, .e
+            inc b
+            jr .l
+.e:         ld a, b                 ; lap * LIST_ROWS
+            add a, a
+            add a, a
+            add a, b
+            add a, a
+            add a, a
+            assert LIST_ROWS == 20
+            ret
+
+cls:        rst 30h
+            db 05h                  ; VIDEO CLS (az editort is alaphelyzetbe teszi)
+            ret
+; kurzor a B. oszlopba, C. sorba (1-től)
+gotoxy:     rst 30h
+            db 23h                  ; EDITOR CU-POS
+            ret
+
+; a jelölő (E karakter) az A. elem sorába
+draw_mark:  ld hl, top
+            sub (hl)
+            add a, LIST_ROW
+            ld c, a
+            ld b, 1
+            push de
+            call gotoxy
+            pop de
+            ld c, e
+            rst 30h
+            db 21h
+            ret
+
+draw_all:   call cls
+            ld hl, s_title
+            call prstr
+            ld a, REG_DRIVE
+            call reg_read
+            cp 4
+            jr c, .dn
+            ld a, 3
+.dn:        add a, a                ; 8 karakteres nevek
+            add a, a
+            add a, a
+            ld e, a
+            ld d, 0
+            ld hl, s_drives
+            add hl, de
+            call prstr
+            ld bc, 0118h            ; a súgó a 24. sorban
+            call gotoxy
+            ld hl, s_help
+            call prstr
+            ld a, (scan_err)
+            or a
+            jr z, .list
+            ld bc, 0100h + LIST_ROW + 2
+            call gotoxy
+            ld hl, s_noread
+            jp prstr
+.list:      ld a, (top)
+            ld (draw_i), a
+            ld a, LIST_ROW
+            ld (draw_row), a
+.row:       ld a, (draw_i)
+            ld hl, ent_count
+            cp (hl)
+            ret nc
+            ld a, (draw_row)
+            cp LIST_ROW + LIST_ROWS
+            ret nc
+            ld c, a
+            ld b, 1
+            call gotoxy
+            ld a, (draw_i)
+            ld hl, cur
+            cp (hl)
+            ld c, ' '
+            jr nz, .m
+            ld c, '>'
+.m:         rst 30h
+            db 21h
+            ld a, (draw_i)
+            call nth_entry
+            ld a, (hl)
+            inc hl
+            ld (draw_dir), a
+            or a
+            ld c, ' '
+            jr z, .b
+            ld c, '['
+.b:         push hl
+            rst 30h
+            db 21h
+            pop hl
+            ld b, NAME_COLS
+.ch:        ld a, (hl)
+            or a
+            jr z, .end
+            cp 20h
+            jr c, .q
+            cp 7Fh
+            jr c, .pr
+.q:         ld a, '?'
+.pr:        push hl
+            push bc
+            ld c, a
+            rst 30h
+            db 21h
+            pop bc
+            pop hl
+            inc hl
+            djnz .ch
+.end:       ld a, (draw_dir)
+            or a
+            jr z, .nx
+            ld c, ']'
+            rst 30h
+            db 21h
+.nx:        ld hl, draw_i
+            inc (hl)
+            ld hl, draw_row
+            inc (hl)
+            jr .row
+
+; A = a lenyomott billentyű (K_..., 0 = nincs)
+get_key:    ld c, 8
+            call read_row
+            ld b, a
+            ld a, K_UP
+            bit 1, b
+            ret z
+            inc a
+            bit 2, b
+            ret z
+            inc a
+            bit 6, b
+            ret z
+            inc a
+            bit 5, b
+            ret z
+            ld c, 5
+            call read_row
+            bit 4, a
+            ld a, K_ENTER
+            ret z
+            ld c, 7
+            call read_row
+            bit 3, a
+            ld a, K_ESC
+            ret z
+            ld c, 4
+            call read_row
+            bit 1, a
+            ld a, K_DRIVE
+            ret z
+            xor a
+            ret
+wait_release:
+            halt
+            call get_key
+            or a
+            jr nz, wait_release
+            ret
+
+; a kártya A. regiszterének olvasása (A-ba) / írása (B)
+reg_read:   push bc
+            ld b, a
+            ld a, (card_base)
+            ld c, a
+            out (c), b
+            inc c
+            in a, (c)
+            pop bc
+            ret
+reg_write:  push bc
+            push af
+            ld a, (card_base)
+            ld c, a
+            pop af
+            out (c), a
+            inc c
+            out (c), b
+            pop bc
+            ret
+
+; az aktuális könyvtár beolvasása a listába: "..", könyvtárak, .sid fájlok
+scan_dir:   xor a
+            ld (scan_err), a
+            ld hl, sidbuf           ; az első elem: ".."
+            ld (hl), 1
+            inc hl
+            ld (hl), '.'
+            inc hl
+            ld (hl), '.'
+            inc hl
+            ld (hl), 0
+            ld a, 1
+            ld (ent_count), a
+            call io_on
             ld hl, s_dot
             ld de, IO_PARAM
             ld bc, 3
@@ -1238,16 +1616,20 @@ list_dir:   call io_on
             call io_off
             ld a, 05h               ; MSC_OPENDIR
             call card_cmd
-            ret nz
-            call io_on
+            jr z, .open
+            ld a, 1
+            ld (scan_err), a
+            ret
+.open:      call io_on
             ld hl, IO_RESULT
             ld de, dirh
             ld bc, 4
             ldir
             call io_off
-            ld hl, s_files
-            call prstr
-.next:      ld hl, dirh
+.next:      ld a, (ent_count)
+            cp ENT_MAX
+            jr nc, .close
+            ld hl, dirh
             call put_handle
             ld a, 07h               ; MSC_READDIR
             call card_cmd
@@ -1256,36 +1638,47 @@ list_dir:   call io_on
             ld a, (IO_RESULT)
             or a
             jr z, .end
-            cp 63
+            cp ENT_SIZE - 1         ; a túl hosszú név kimarad
             jr c, .len
-            ld a, 63
+            call io_off
+            jr .next
 .len:       ld c, a
             ld b, 0
             ld hl, IO_RESULT + 1
-            ld de, entbuf
+            ld de, entbuf + 1
             ldir
             xor a
             ld (de), a
             ld a, (IO_ATTR)
             ld b, a
             call io_off
-            bit 4, b                ; könyvtár
-            jr nz, .next
-            ld hl, entbuf
+            ld a, b
+            and 10h                 ; könyvtár
+            jr z, .f
+            ld a, (entbuf + 1)      ; a "." és a ".." kimarad
+            cp '.'
+            jr z, .next
+            ld a, 1
+            jr .add
+.f:         ld hl, entbuf + 1
             call is_sid
             jr nz, .next
+            xor a
+.add:       ld (entbuf), a
+            ld a, (ent_count)
+            call nth_entry
+            ex de, hl
             ld hl, entbuf
-            call prstr
-            ld hl, s_sep
-            call prstr
+            ld bc, ENT_SIZE
+            ldir
+            ld hl, ent_count
+            inc (hl)
             jr .next
 .end:       call io_off
 .close:     ld hl, dirh
             call put_handle
             ld a, 06h               ; MSC_CLOSEDIR
-            call card_cmd
-            ld hl, s_crlf
-            jp prstr
+            jp card_cmd
 
 ; Z = 1, ha a HL-en kezdődő (0-végű) név ".sid"-re végződik (kisbetű/nagybetű)
 is_sid:     ld b, 0
@@ -1317,103 +1710,6 @@ is_sid:     ld b, 0
             djnz .c
             ret                     ; Z = 1
 .no:        or 1
-            ret
-
-; egy sor beolvasása a namebuf-ba (ROM: RST 30h / A1h = EDITOR karakter be)
-; Z = 1: üres sor
-read_line:  ld hl, namebuf
-            ld b, 0
-.l:         push hl
-            push bc
-            rst 30h
-            db 0A1h
-            ld a, c
-            pop bc
-            pop hl
-            cp 13
-            jr z, .e
-            cp 20h
-            jr c, .l
-            ld e, a
-            ld a, b
-            cp 40
-            jr nc, .l
-            ld (hl), e
-            inc hl
-            inc b
-            jr .l
-.e:         ld (hl), 0
-            ld a, b
-            or a
-            ret
-
-; a név végéről a szóközök, ",dal" -> song_req, kiterjesztés nélkül + ".sid"
-parse_name: xor a
-            ld (song_req), a
-            ld hl, namebuf
-            ld c, 0                 ; volt-e pont
-.f:         ld a, (hl)
-            or a
-            jr z, .end
-            cp ','
-            jr z, .num
-            cp ' '
-            jr z, .cut
-            cp '.'
-            jr nz, .n
-            inc c
-.n:         inc hl
-            jr .f
-.cut:       ld (hl), 0
-.skip:      inc hl                  ; a szóköz után jöhet még ",dal"
-            ld a, (hl)
-            or a
-            jr z, .end0
-            cp ','
-            jr nz, .skip
-.num:       ld (hl), 0
-            inc hl
-            ld b, 0
-.d:         ld a, (hl)
-            sub '0'
-            jr c, .dn
-            cp 10
-            jr nc, .dn
-            ld e, a
-            ld a, b
-            add a, a
-            add a, a
-            add a, b
-            add a, a
-            add a, e
-            ld b, a
-            inc hl
-            jr .d
-.dn:        ld a, b
-            ld (song_req), a
-.end0:
-.end:       ld a, c
-            or a
-            jr nz, .len
-            ld hl, namebuf          ; nincs pont: + ".sid"
-            xor a
-            ld bc, 0
-            cpir
-            dec hl
-            ex de, hl
-            ld hl, s_ext
-            ld bc, 5
-            ldir
-.len:       ld hl, namebuf
-            ld b, 0
-.l:         ld a, (hl)
-            or a
-            jr z, .le
-            inc hl
-            inc b
-            jr .l
-.le:        ld a, b
-            ld (name_len), a
             ret
 
 ; a namebuf nevű fájl beolvasása a sidbuf-ba; Cy = 1: hiba (kiírva)
@@ -1516,9 +1812,20 @@ s_author:   db "Szerzo: ", 0
 s_rel:      db "Kiadva: ", 0
 s_info:     db "Betoltes: $", 0
 s_name:     db "Nev:    ", 0
-s_title:    db 13, 10, "SID lejatszo - TVC256k++", 13, 10, 0
-s_files:    db "SID fajlok: ", 0
-s_prompt:   db 13, 10, "Fajlnev (,dal) - Enter: kilepes", 13, 10, 0
+s_title:    db "SID lejatszo - TVC256k++  ", 0
+s_drives:   db "USB", 0, 0, 0, 0, 0, "PSRAM", 0, 0, 0, "FLASH", 0, 0, 0, "DSK", 0
+s_help:     db "Enter:indit D:meghajto ESC:ki", 0
+s_noread:   db "Nem olvashato a meghajto!", 0
+s_anykey:   db 13, 10, "Nyomj meg egy gombot!", 0
+cur:        db 0
+top:        db 0
+ent_count:  db 0
+scan_err:   db 0
+last_key:   db 0
+key_rep:    db 0
+draw_i:     db 0
+draw_row:   db 0
+draw_dir:   db 0
 s_notfound: db "Nincs ilyen fajl!", 13, 10, 0
 s_toolarge: db "Tul nagy fajl!", 13, 10, 0
 s_sep:      db "  ", 0
@@ -1543,11 +1850,11 @@ fileh:      ds 4
 dest:       dw 0
 name_len:   db 0
 namebuf:    ds 48
-entbuf:     ds 64
+entbuf:     ds ENT_SIZE + 1
 s_dash:     db "-$", 0
 s_song:     db "  dal: ", 0
 s_slash:    db "/", 0
-s_keys:     db 13, 10, "1-9,0: dal  <- ->: elozo/kov.", 13, 10
+s_keys:     db 13, 10, 13, 10, "1-9,0: dal  <- ->: elozo/kov.", 13, 10
             db "ESC/SPACE: vissza a listahoz", 13, 10, 0
 
 saved_sp:   dw 0

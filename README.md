@@ -15,19 +15,20 @@ könyvtárban). Saját fordítás:
 ./build.sh                   # -> build/sidplay.cas
 ```
 
-A gépen: a `sidplay.cas` és a `.sid` fájlok ugyanarra a meghajtóra
-(könyvtárba), `LOAD "sidplay"`. A lejátszó kiírja a könyvtár `.sid` fájljait,
-és bekéri a nevet:
+A gépen: a `sidplay.cas` a kártya valamelyik meghajtójára, `LOAD "sidplay"`.
+Egy egyszerű fájlválasztó indul, amely az aktuális könyvtár alkönyvtárait
+és `.sid` fájljait mutatja:
 
-- `commando` vagy `commando.sid`: a fejléc szerinti kezdő dal,
-- `commando,3`: a 3. dal,
-- üres sor (Enter): vissza a BASIC-be.
+- **fel / le**: léptetés, **balra / jobbra**: lapozás,
+- **Enter**: a fájl lejátszása, illetve belépés a `[könyvtárba]` (`[..]`: vissza),
+- **D**: a következő meghajtó (USB pendrive, PSRAM, flash),
+- **ESC**: vissza a BASIC-be.
 
 Lejátszás közben:
 
 - **1-9**, **0**: az 1-9., illetve a 10. dal,
 - **jobbra / balra nyíl**: a következő / előző dal,
-- **ESC** vagy **SPACE**: vissza a fájllistához.
+- **ESC** vagy **SPACE**: vissza a fájlválasztóhoz.
 
 Kell: Python 3, [sjasmplus](https://github.com/z00m128/sjasmplus). A gépen:
 TVC 64k (a U3 RAM-ot is használja) és TVC256k++ kártya (az 1., 2., 3. vagy

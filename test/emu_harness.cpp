@@ -97,6 +97,11 @@ static void typeText(const char *t)
     else if (*t == ' ') key(0x46);
     else if (*t == ',') key(0x42);
     else if (*t == '\n') key(0x3E);
+    else if (*t == 'U') key(0x3B);      // nagybetűk: nyilak (U, D, L, R) és ESC (E)
+    else if (*t == 'D') key(0x39);
+    else if (*t == 'L') key(0x3D);
+    else if (*t == 'R') key(0x3A);
+    else if (*t == 'E') key(0x38);
   }
 }
 static void writeWav(const char *fn, int rate)
