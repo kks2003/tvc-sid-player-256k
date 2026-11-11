@@ -2859,6 +2859,11 @@ op_99:
             add a,ixh
             jr nc,$+3
             inc l
+            ld h,a
+            ld a,l
+            cp 0D4h
+            jr z,.sid
+            ld a,h
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -2877,79 +2882,27 @@ op_99:
 .s1:
             call wslow_A
             jr .b1
-            ds cpu_base + 2748 - $
-op_BC:
-            assert (op_BC & 255) == 188
-; LDY absx
+.sid:
+            ld a,h
+            call sid_fast
+            ex af,af'
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 2766 - $
+op_CE:
+            assert (op_CE & 255) == 206
+; DEC abs
+            ex af,af'
             ex de,hl
             ld a,(hl)
             inc hl
             ld e,(hl)
             inc hl
             ex de,hl
-            add a,c
-            jr nc,$+3
-            inc l
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
-            ld ixh,a
-            or a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 2774 - $
-op_D6:
-            assert (op_D6 & 255) == 214
-; DEC zpx
-            ex af,af'
-            ld a,(de)
-            inc de
-            add a,c
-            ld l,a
-            ld h,ZPG>>8
-            ex af,af'
-            dec (hl)
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 2790 - $
-op_E6:
-            assert (op_E6 & 255) == 230
-; INC zp
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,ZPG>>8
-            inc (hl)
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 2803 - $
-op_F3:
-            assert (op_F3 & 255) == 243
-; ISC indy
-            ex af,af'
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,ZPG>>8
-            ld a,(hl)
-            inc l
-            ld l,(hl)
-            add a,ixh
-            jr nc,$+3
-            inc l
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -2958,9 +2911,7 @@ op_F3:
 .b1:
             ld l,a
             ex af,af'
-            inc (hl)
-            ld a,(hl)
-            call do_sbc
+            dec (hl)
             ld a,(de)
             inc de
             ld l,a
@@ -2970,30 +2921,95 @@ op_F3:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 2848 - $
-op_20:
-            assert (op_20 & 255) == 32
-; JSR abs
-            ex af,af'
+            ds cpu_base + 2795 - $
+op_EB:
+            assert (op_EB & 255) == 235
+; SBC imm
+            ld a,(de)
             inc de
-            ld h,INV>>8
-            ld l,d
-            ld a,(hl)
-            ld hl,(rS)
-            ld (hl),a
-            dec l
-            ld (hl),e
-            dec l
-            ld a,l
-            ld (rS),a
-            ex de,hl
-            ld a,(hl)
-            dec hl
-            ld e,(hl)
+            call do_sbc
+            ld a,(de)
+            inc de
             ld l,a
-            ld h,RT>>8
-            ld d,(hl)
-            ex af,af'
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 2808 - $
+op_F8:
+            assert (op_F8 & 255) == 248
+; SED imp
+            ld a,08h
+            ld (fD),a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 2820 - $
+op_04:
+            assert (op_04 & 255) == 4
+; NOPR zp
+            inc de
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 2828 - $
+op_0C:
+            assert (op_0C & 255) == 12
+; NOPR abs
+            inc de
+            inc de
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 2837 - $
+op_15:
+            assert (op_15 & 255) == 21
+; ORA zpx
+            ld a,(de)
+            inc de
+            add a,c
+            ld l,a
+            ld h,ZPG>>8
+            ld a,(hl)
+            or b
+            ld b,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 2854 - $
+op_26:
+            assert (op_26 & 255) == 38
+; ROL zp
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,ZPG>>8
+            ld a,ixl
+            rra
+            rl (hl)
+            rla
+            ld ixl,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 2874 - $
+op_3A:
+            assert (op_3A & 255) == 58
+; NOP imp
             ld a,(de)
             inc de
             ld l,a
@@ -3210,35 +3226,18 @@ op_09:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3093 - $
-op_15:
-            assert (op_15 & 255) == 21
-; ORA zpx
+            ds cpu_base + 3094 - $
+op_16:
+            assert (op_16 & 255) == 22
+; ASL zpx
+            ex af,af'
             ld a,(de)
             inc de
             add a,c
             ld l,a
             ld h,ZPG>>8
-            ld a,(hl)
-            or b
-            ld b,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3110 - $
-op_26:
-            assert (op_26 & 255) == 38
-; ROL zp
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,ZPG>>8
-            ld a,ixl
-            rra
-            rl (hl)
+            ex af,af'
+            sla (hl)
             rla
             ld ixl,a
             ld a,(de)
@@ -3247,28 +3246,43 @@ op_26:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3130 - $
-op_3A:
-            assert (op_3A & 255) == 58
-; NOP imp
+            ds cpu_base + 3115 - $
+op_2B:
+            assert (op_2B & 255) == 43
+; ANC imm
+            ld a,(de)
+            inc de
+            and b
+            ld b,a
+            push af
+            rlca
+            and 1
+            ld ixl,a
+            pop af
             ld a,(de)
             inc de
             ld l,a
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3138 - $
-op_42:
-            assert (op_42 & 255) == 66
-; KIL / nem támogatott
-            jp emu_brk
-            ds cpu_base + 3145 - $
-op_49:
-            assert (op_49 & 255) == 73
-; EOR imm
-            ld a,(de)
-            inc de
-            xor b
+            ds cpu_base + 3133 - $
+op_3D:
+            assert (op_3D & 255) == 61
+; AND absx
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            add a,c
+            jr nc,$+3
+            inc l
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            and b
             ld b,a
             ld a,(de)
             inc de
@@ -3425,203 +3439,10 @@ op_C3:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 3307 - $
-op_EB:
-            assert (op_EB & 255) == 235
-; SBC imm
-            ld a,(de)
-            inc de
-            call do_sbc
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3320 - $
-op_F8:
-            assert (op_F8 & 255) == 248
-; SED imp
-            ld a,08h
-            ld (fD),a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3332 - $
-op_04:
-            assert (op_04 & 255) == 4
-; NOPR zp
-            inc de
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3340 - $
-op_0C:
-            assert (op_0C & 255) == 12
-; NOPR abs
-            inc de
-            inc de
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3350 - $
-op_16:
-            assert (op_16 & 255) == 22
-; ASL zpx
-            ex af,af'
-            ld a,(de)
-            inc de
-            add a,c
-            ld l,a
-            ld h,ZPG>>8
-            ex af,af'
-            sla (hl)
-            rla
-            ld ixl,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3371 - $
-op_2B:
-            assert (op_2B & 255) == 43
-; ANC imm
-            ld a,(de)
-            inc de
-            and b
-            ld b,a
-            push af
-            rlca
-            and 1
-            ld ixl,a
-            pop af
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3389 - $
-op_3D:
-            assert (op_3D & 255) == 61
-; AND absx
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            add a,c
-            jr nc,$+3
-            inc l
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
-            and b
-            ld b,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3417 - $
-op_59:
-            assert (op_59 & 255) == 89
-; EOR absy
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            add a,ixh
-            jr nc,$+3
-            inc l
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
-            xor b
-            ld b,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3442 - $
-op_72:
-            assert (op_72 & 255) == 114
-; KIL / nem támogatott
-            jp emu_brk
-            ds cpu_base + 3446 - $
-op_76:
-            assert (op_76 & 255) == 118
-; ROR zpx
-            ex af,af'
-            ld a,(de)
-            inc de
-            add a,c
-            ld l,a
-            ld h,ZPG>>8
-            ex af,af'
-            ld a,ixl
-            rra
-            rr (hl)
-            rla
-            ld ixl,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3469 - $
-op_8D:
-            assert (op_8D & 255) == 141
-; STA abs
-            ex af,af'
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            ld h,WT>>8
-            ld h,(hl)
-            inc h
-            dec h
-            jr z,.s1
-.b1:
-            ld l,a
-            ex af,af'
-            ld (hl),b
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-.s1:
-            call wslow_A
-            jr .b1
-            ds cpu_base + 3503 - $
-op_AF:
-            assert (op_AF & 255) == 175
-; LAX abs
+            ds cpu_base + 3308 - $
+op_EC:
+            assert (op_EC & 255) == 236
+; CPX abs
             ex de,hl
             ld a,(hl)
             inc hl
@@ -3632,61 +3453,8 @@ op_AF:
             ld h,(hl)
             ld l,a
             ld a,(hl)
-            ld b,a
-            ld c,a
-            or a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3531 - $
-op_CB:
-            assert (op_CB & 255) == 203
-; SBX imm
-            ld a,(de)
-            inc de
             ld l,a
             ld a,c
-            and b
-            sub l
-            ld c,a
-            ccf
-            rla
-            ld ixl,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 3551 - $
-op_DF:
-            assert (op_DF & 255) == 223
-; DCP absx
-            ex af,af'
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            add a,c
-            jr nc,$+3
-            inc l
-            ld h,WT>>8
-            ld h,(hl)
-            inc h
-            dec h
-            jr z,.s1
-.b1:
-            ld l,a
-            ex af,af'
-            dec (hl)
-            ld a,(hl)
-            ld l,a
-            ld a,b
             sub l
             ccf
             rla
@@ -3697,10 +3465,7 @@ op_DF:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-.s1:
-            call wslow_R
-            jr .b1
-            ds cpu_base + 3594 - $
+            ds cpu_base + 3338 - $
 op_0A:
             assert (op_0A & 255) == 10
 ; ASL acc
@@ -3713,7 +3478,7 @@ op_0A:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3609 - $
+            ds cpu_base + 3353 - $
 op_19:
             assert (op_19 & 255) == 25
 ; ORA absy
@@ -3738,12 +3503,12 @@ op_19:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3634 - $
+            ds cpu_base + 3378 - $
 op_32:
             assert (op_32 & 255) == 50
 ; KIL / nem támogatott
             jp emu_brk
-            ds cpu_base + 3639 - $
+            ds cpu_base + 3383 - $
 op_37:
             assert (op_37 & 255) == 55
 ; RLA zpx
@@ -3768,7 +3533,7 @@ op_37:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3665 - $
+            ds cpu_base + 3409 - $
 op_51:
             assert (op_51 & 255) == 81
 ; EOR indy
@@ -3794,7 +3559,7 @@ op_51:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3693 - $
+            ds cpu_base + 3437 - $
 op_6D:
             assert (op_6D & 255) == 109
 ; ADC abs
@@ -3815,7 +3580,7 @@ op_6D:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3720 - $
+            ds cpu_base + 3464 - $
 op_88:
             assert (op_88 & 255) == 136
 ; DEY imp
@@ -3826,7 +3591,7 @@ op_88:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 3729 - $
+            ds cpu_base + 3473 - $
 op_91:
             assert (op_91 & 255) == 145
 ; STA indy
@@ -3859,6 +3624,244 @@ op_91:
 .s1:
             call wslow_A
             jr .b1
+            ds cpu_base + 3516 - $
+op_BC:
+            assert (op_BC & 255) == 188
+; LDY absx
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            add a,c
+            jr nc,$+3
+            inc l
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            ld ixh,a
+            or a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 3542 - $
+op_D6:
+            assert (op_D6 & 255) == 214
+; DEC zpx
+            ex af,af'
+            ld a,(de)
+            inc de
+            add a,c
+            ld l,a
+            ld h,ZPG>>8
+            ex af,af'
+            dec (hl)
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 3558 - $
+op_E6:
+            assert (op_E6 & 255) == 230
+; INC zp
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,ZPG>>8
+            inc (hl)
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 3571 - $
+op_F3:
+            assert (op_F3 & 255) == 243
+; ISC indy
+            ex af,af'
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,ZPG>>8
+            ld a,(hl)
+            inc l
+            ld l,(hl)
+            add a,ixh
+            jr nc,$+3
+            inc l
+            ld h,WT>>8
+            ld h,(hl)
+            inc h
+            dec h
+            jr z,.s1
+.b1:
+            ld l,a
+            ex af,af'
+            inc (hl)
+            ld a,(hl)
+            call do_sbc
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+.s1:
+            call wslow_R
+            jr .b1
+            ds cpu_base + 3616 - $
+op_20:
+            assert (op_20 & 255) == 32
+; JSR abs
+            ex af,af'
+            inc de
+            ld h,INV>>8
+            ld l,d
+            ld a,(hl)
+            ld hl,(rS)
+            ld (hl),a
+            dec l
+            ld (hl),e
+            dec l
+            ld a,l
+            ld (rS),a
+            ex de,hl
+            ld a,(hl)
+            dec hl
+            ld e,(hl)
+            ld l,a
+            ld h,RT>>8
+            ld d,(hl)
+            ex af,af'
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 3650 - $
+op_42:
+            assert (op_42 & 255) == 66
+; KIL / nem támogatott
+            jp emu_brk
+            ds cpu_base + 3657 - $
+op_49:
+            assert (op_49 & 255) == 73
+; EOR imm
+            ld a,(de)
+            inc de
+            xor b
+            ld b,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 3673 - $
+op_59:
+            assert (op_59 & 255) == 89
+; EOR absy
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            add a,ixh
+            jr nc,$+3
+            inc l
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            xor b
+            ld b,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 3698 - $
+op_72:
+            assert (op_72 & 255) == 114
+; KIL / nem támogatott
+            jp emu_brk
+            ds cpu_base + 3702 - $
+op_76:
+            assert (op_76 & 255) == 118
+; ROR zpx
+            ex af,af'
+            ld a,(de)
+            inc de
+            add a,c
+            ld l,a
+            ld h,ZPG>>8
+            ex af,af'
+            ld a,ixl
+            rra
+            rr (hl)
+            rla
+            ld ixl,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 3725 - $
+op_8D:
+            assert (op_8D & 255) == 141
+; STA abs
+            ex af,af'
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            ld h,a
+            ld a,l
+            cp 0D4h
+            jr z,.sid
+            ld a,h
+            ld h,WT>>8
+            ld h,(hl)
+            inc h
+            dec h
+            jr z,.s1
+.b1:
+            ld l,a
+            ex af,af'
+            ld (hl),b
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+.s1:
+            call wslow_A
+            jr .b1
+.sid:
+            ld a,h
+            call sid_fast
+            ex af,af'
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
             ds cpu_base + 3773 - $
 op_BD:
             assert (op_BD & 255) == 189
@@ -4071,49 +4074,40 @@ op_8E:
 .s1:
             call wslow_X
             jr .b1
-            ds cpu_base + 4016 - $
-op_B0:
-            assert (op_B0 & 255) == 176
-; BCS rel
-            ex af,af'
-            ld a,ixl
-            rra
-            jp c,br_taken_alt
-            ex af,af'
-            inc de
+            ds cpu_base + 4015 - $
+op_AF:
+            assert (op_AF & 255) == 175
+; LAX abs
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            ld b,a
+            ld c,a
+            or a
             ld a,(de)
             inc de
             ld l,a
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 4032 - $
-op_C0:
-            assert (op_C0 & 255) == 192
-; CPY imm
-            ld a,(de)
-            inc de
-            ld l,a
-            ld a,ixh
-            sub l
-            ccf
-            rla
-            ld ixl,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4064 - $
-op_E0:
-            assert (op_E0 & 255) == 224
-; CPX imm
+            ds cpu_base + 4043 - $
+op_CB:
+            assert (op_CB & 255) == 203
+; SBX imm
             ld a,(de)
             inc de
             ld l,a
             ld a,c
+            and b
             sub l
+            ld c,a
             ccf
             rla
             ld ixl,a
@@ -4123,22 +4117,11 @@ op_E0:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 4080 - $
-op_F0:
-            assert (op_F0 & 255) == 240
-; BEQ rel
-            jp z,br_taken
-            inc de
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4093 - $
-op_FD:
-            assert (op_FD & 255) == 253
-; SBC absx
+            ds cpu_base + 4063 - $
+op_DF:
+            assert (op_DF & 255) == 223
+; DCP absx
+            ex af,af'
             ex de,hl
             ld a,(hl)
             inc hl
@@ -4148,47 +4131,35 @@ op_FD:
             add a,c
             jr nc,$+3
             inc l
-            ld h,RT>>8
+            ld h,WT>>8
             ld h,(hl)
+            inc h
+            dec h
+            jr z,.s1
+.b1:
             ld l,a
+            ex af,af'
+            dec (hl)
             ld a,(hl)
-            call do_sbc
+            ld l,a
+            ld a,b
+            sub l
+            ccf
+            rla
+            ld ixl,a
             ld a,(de)
             inc de
             ld l,a
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 4122 - $
-op_1A:
-            assert (op_1A & 255) == 26
-; NOP imp
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4136 - $
-op_28:
-            assert (op_28 & 255) == 40
-; PLP imp
-            ld hl,(rS)
-            inc l
-            ld a,l
-            ld (rS),a
-            ld a,(hl)
-            call setp
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4155 - $
-op_3B:
-            assert (op_3B & 255) == 59
-; RLA absy
+.s1:
+            call wslow_R
+            jr .b1
+            ds cpu_base + 4110 - $
+op_0E:
+            assert (op_0E & 255) == 14
+; ASL abs
             ex af,af'
             ex de,hl
             ld a,(hl)
@@ -4196,9 +4167,37 @@ op_3B:
             ld e,(hl)
             inc hl
             ex de,hl
-            add a,ixh
-            jr nc,$+3
-            inc l
+            ld h,WT>>8
+            ld h,(hl)
+            inc h
+            dec h
+            jr z,.s1
+.b1:
+            ld l,a
+            ex af,af'
+            sla (hl)
+            rla
+            ld ixl,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+.s1:
+            call wslow_R
+            jr .b1
+            ds cpu_base + 4143 - $
+op_2F:
+            assert (op_2F & 255) == 47
+; RLA abs
+            ex af,af'
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -4224,13 +4223,25 @@ op_3B:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 4201 - $
-op_69:
-            assert (op_69 & 255) == 105
-; ADC imm
-            ld a,(de)
-            inc de
-            call do_adc
+            ds cpu_base + 4189 - $
+op_5D:
+            assert (op_5D & 255) == 93
+; EOR absx
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            add a,c
+            jr nc,$+3
+            inc l
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            xor b
+            ld b,a
             ld a,(de)
             inc de
             ld l,a
@@ -4314,31 +4325,12 @@ op_BF:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 4322 - $
-op_E2:
-            assert (op_E2 & 255) == 226
-; NOPR imm
-            inc de
+            ds cpu_base + 4320 - $
+op_E0:
+            assert (op_E0 & 255) == 224
+; CPX imm
             ld a,(de)
             inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4332 - $
-op_EC:
-            assert (op_EC & 255) == 236
-; CPX abs
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
             ld l,a
             ld a,c
             sub l
@@ -4351,41 +4343,72 @@ op_EC:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 4366 - $
-op_0E:
-            assert (op_0E & 255) == 14
-; ASL abs
-            ex af,af'
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            ld h,WT>>8
-            ld h,(hl)
-            inc h
-            dec h
-            jr z,.s1
-.b1:
-            ld l,a
-            ex af,af'
-            sla (hl)
-            rla
-            ld ixl,a
+            ds cpu_base + 4336 - $
+op_F0:
+            assert (op_F0 & 255) == 240
+; BEQ rel
+            jp z,br_taken
+            inc de
             ld a,(de)
             inc de
             ld l,a
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-.s1:
-            call wslow_R
-            jr .b1
-            ds cpu_base + 4399 - $
-op_2F:
-            assert (op_2F & 255) == 47
-; RLA abs
+            ds cpu_base + 4349 - $
+op_FD:
+            assert (op_FD & 255) == 253
+; SBC absx
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            add a,c
+            jr nc,$+3
+            inc l
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            call do_sbc
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 4378 - $
+op_1A:
+            assert (op_1A & 255) == 26
+; NOP imp
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 4392 - $
+op_28:
+            assert (op_28 & 255) == 40
+; PLP imp
+            ld hl,(rS)
+            inc l
+            ld a,l
+            ld (rS),a
+            ld a,(hl)
+            call setp
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 4411 - $
+op_3B:
+            assert (op_3B & 255) == 59
+; RLA absy
             ex af,af'
             ex de,hl
             ld a,(hl)
@@ -4393,6 +4416,9 @@ op_2F:
             ld e,(hl)
             inc hl
             ex de,hl
+            add a,ixh
+            jr nc,$+3
+            inc l
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -4418,25 +4444,13 @@ op_2F:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 4445 - $
-op_5D:
-            assert (op_5D & 255) == 93
-; EOR absx
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            add a,c
-            jr nc,$+3
-            inc l
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
-            xor b
-            ld b,a
+            ds cpu_base + 4457 - $
+op_69:
+            assert (op_69 & 255) == 105
+; ADC imm
+            ld a,(de)
+            inc de
+            call do_adc
             ld a,(de)
             inc de
             ld l,a
@@ -4480,6 +4494,11 @@ op_9D:
             add a,c
             jr nc,$+3
             inc l
+            ld h,a
+            ld a,l
+            cp 0D4h
+            jr z,.sid
+            ld a,h
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -4498,10 +4517,31 @@ op_9D:
 .s1:
             call wslow_A
             jr .b1
-            ds cpu_base + 4556 - $
-op_CC:
-            assert (op_CC & 255) == 204
-; CPY abs
+.sid:
+            ld a,h
+            call sid_fast
+            ex af,af'
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 4578 - $
+op_E2:
+            assert (op_E2 & 255) == 226
+; NOPR imm
+            inc de
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 4589 - $
+op_ED:
+            assert (op_ED & 255) == 237
+; SBC abs
             ex de,hl
             ld a,(hl)
             inc hl
@@ -4511,28 +4551,6 @@ op_CC:
             ld h,RT>>8
             ld h,(hl)
             ld l,a
-            ld a,(hl)
-            ld l,a
-            ld a,ixh
-            sub l
-            ccf
-            rla
-            ld ixl,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4583 - $
-op_E7:
-            assert (op_E7 & 255) == 231
-; ISC zp
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,ZPG>>8
-            inc (hl)
             ld a,(hl)
             call do_sbc
             ld a,(de)
@@ -4541,187 +4559,7 @@ op_E7:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 4606 - $
-op_FE:
-            assert (op_FE & 255) == 254
-; INC absx
-            ex af,af'
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            add a,c
-            jr nc,$+3
-            inc l
-            ld h,WT>>8
-            ld h,(hl)
-            inc h
-            dec h
-            jr z,.s1
-.b1:
-            ld l,a
-            ex af,af'
-            inc (hl)
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-.s1:
-            call wslow_R
-            jr .b1
-            ds cpu_base + 4649 - $
-op_29:
-            assert (op_29 & 255) == 41
-; AND imm
-            ld a,(de)
-            inc de
-            and b
-            ld b,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4672 - $
-op_40:
-            assert (op_40 & 255) == 64
-; RTI imp
-            ld hl,(rS)
-            inc l
-            ld a,(hl)
-            push af
-            inc l
-            ld e,(hl)
-            inc l
-            ld d,(hl)
-            ld a,l
-            ld (rS),a
-            ld hl,stop_s
-            cp (hl)
-            jr z,.x
-            ld l,d
-            ld h,RT>>8
-            ld d,(hl)
-            pop af
-            call setp
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-.x:
-            pop af
-            call setp
-            jp emu_exit
-            ds cpu_base + 4723 - $
-op_73:
-            assert (op_73 & 255) == 115
-; RRA indy
-            ex af,af'
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,ZPG>>8
-            ld a,(hl)
-            inc l
-            ld l,(hl)
-            add a,ixh
-            jr nc,$+3
-            inc l
-            ld h,WT>>8
-            ld h,(hl)
-            inc h
-            dec h
-            jr z,.s1
-.b1:
-            ld l,a
-            ex af,af'
-            ld a,ixl
-            rra
-            rr (hl)
-            rla
-            ld ixl,a
-            ld a,(hl)
-            call do_adc
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-.s1:
-            call wslow_R
-            jr .b1
-            ds cpu_base + 4785 - $
-op_B1:
-            assert (op_B1 & 255) == 177
-; LDA indy
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,ZPG>>8
-            ld a,(hl)
-            inc l
-            ld l,(hl)
-            add a,ixh
-            jr nc,$+3
-            inc l
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
-            ld b,a
-            or a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4813 - $
-op_CD:
-            assert (op_CD & 255) == 205
-; CMP abs
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
-            ld l,a
-            ld a,b
-            sub l
-            ccf
-            rla
-            ld ixl,a
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4840 - $
-op_E8:
-            assert (op_E8 & 255) == 232
-; INX imp
-            inc c
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 4879 - $
+            ds cpu_base + 4623 - $
 op_0F:
             assert (op_0F & 255) == 15
 ; SLO abs
@@ -4755,7 +4593,7 @@ op_0F:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 4915 - $
+            ds cpu_base + 4659 - $
 op_33:
             assert (op_33 & 255) == 51
 ; RLA indy
@@ -4795,7 +4633,7 @@ op_33:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 4963 - $
+            ds cpu_base + 4707 - $
 op_63:
             assert (op_63 & 255) == 99
 ; RRA indx
@@ -4832,7 +4670,7 @@ op_63:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 5007 - $
+            ds cpu_base + 4751 - $
 op_8F:
             assert (op_8F & 255) == 143
 ; SAX abs
@@ -4865,22 +4703,53 @@ op_8F:
 .s1:
             call wslow_SAX
             jr .b1
-            ds cpu_base + 5042 - $
-op_B2:
-            assert (op_B2 & 255) == 178
-; KIL / nem támogatott
-            jp emu_brk
-            ds cpu_base + 5070 - $
-op_CE:
-            assert (op_CE & 255) == 206
-; DEC abs
+            ds cpu_base + 4784 - $
+op_B0:
+            assert (op_B0 & 255) == 176
+; BCS rel
             ex af,af'
-            ex de,hl
+            ld a,ixl
+            rra
+            jp c,br_taken_alt
+            ex af,af'
+            inc de
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 4800 - $
+op_C0:
+            assert (op_C0 & 255) == 192
+; CPY imm
+            ld a,(de)
+            inc de
+            ld l,a
+            ld a,ixh
+            sub l
+            ccf
+            rla
+            ld ixl,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 4835 - $
+op_E3:
+            assert (op_E3 & 255) == 227
+; ISC indx
+            ex af,af'
+            ld a,(de)
+            inc de
+            add a,c
+            ld l,a
+            ld h,ZPG>>8
             ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
+            inc l
+            ld l,(hl)
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -4889,7 +4758,9 @@ op_CE:
 .b1:
             ld l,a
             ex af,af'
-            dec (hl)
+            inc (hl)
+            ld a,(hl)
+            call do_sbc
             ld a,(de)
             inc de
             ld l,a
@@ -4899,28 +4770,7 @@ op_CE:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 5101 - $
-op_ED:
-            assert (op_ED & 255) == 237
-; SBC abs
-            ex de,hl
-            ld a,(hl)
-            inc hl
-            ld e,(hl)
-            inc hl
-            ex de,hl
-            ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ld a,(hl)
-            call do_sbc
-            ld a,(de)
-            inc de
-            ld l,a
-            ld h,OPHI>>8
-            ld h,(hl)
-            jp (hl)
-            ds cpu_base + 5137 - $
+            ds cpu_base + 4881 - $
 op_11:
             assert (op_11 & 255) == 17
 ; ORA indy
@@ -4946,7 +4796,7 @@ op_11:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 5164 - $
+            ds cpu_base + 4908 - $
 op_2C:
             assert (op_2C & 255) == 44
 ; BIT abs
@@ -4967,7 +4817,7 @@ op_2C:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 5194 - $
+            ds cpu_base + 4938 - $
 op_4A:
             assert (op_4A & 255) == 74
 ; LSR acc
@@ -4980,7 +4830,7 @@ op_4A:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 5215 - $
+            ds cpu_base + 4959 - $
 op_5F:
             assert (op_5F & 255) == 95
 ; SRE absx
@@ -5017,12 +4867,12 @@ op_5F:
 .s1:
             call wslow_R
             jr .b1
-            ds cpu_base + 5259 - $
+            ds cpu_base + 5003 - $
 op_8B:
             assert (op_8B & 255) == 139
 ; KIL / nem támogatott
             jp emu_brk
-            ds cpu_base + 5264 - $
+            ds cpu_base + 5008 - $
 op_90:
             assert (op_90 & 255) == 144
 ; BCC rel
@@ -5038,7 +4888,7 @@ op_90:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 5280 - $
+            ds cpu_base + 5024 - $
 op_A0:
             assert (op_A0 & 255) == 160
 ; LDY imm
@@ -5052,39 +4902,66 @@ op_A0:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 5328 - $
-op_D0:
-            assert (op_D0 & 255) == 208
-; BNE rel
-            jp nz,br_taken
+            ds cpu_base + 5041 - $
+op_B1:
+            assert (op_B1 & 255) == 177
+; LDA indy
+            ld a,(de)
             inc de
+            ld l,a
+            ld h,ZPG>>8
+            ld a,(hl)
+            inc l
+            ld l,(hl)
+            add a,ixh
+            jr nc,$+3
+            inc l
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            ld b,a
+            or a
             ld a,(de)
             inc de
             ld l,a
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
-            ds cpu_base + 5347 - $
-op_E3:
-            assert (op_E3 & 255) == 227
-; ISC indx
-            ex af,af'
+            ds cpu_base + 5068 - $
+op_CC:
+            assert (op_CC & 255) == 204
+; CPY abs
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            ld l,a
+            ld a,ixh
+            sub l
+            ccf
+            rla
+            ld ixl,a
             ld a,(de)
             inc de
-            add a,c
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 5095 - $
+op_E7:
+            assert (op_E7 & 255) == 231
+; ISC zp
+            ld a,(de)
+            inc de
             ld l,a
             ld h,ZPG>>8
-            ld a,(hl)
-            inc l
-            ld l,(hl)
-            ld h,WT>>8
-            ld h,(hl)
-            inc h
-            dec h
-            jr z,.s1
-.b1:
-            ld l,a
-            ex af,af'
             inc (hl)
             ld a,(hl)
             call do_sbc
@@ -5094,9 +4971,165 @@ op_E3:
             ld h,OPHI>>8
             ld h,(hl)
             jp (hl)
+            ds cpu_base + 5118 - $
+op_FE:
+            assert (op_FE & 255) == 254
+; INC absx
+            ex af,af'
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            add a,c
+            jr nc,$+3
+            inc l
+            ld h,WT>>8
+            ld h,(hl)
+            inc h
+            dec h
+            jr z,.s1
+.b1:
+            ld l,a
+            ex af,af'
+            inc (hl)
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
 .s1:
             call wslow_R
             jr .b1
+            ds cpu_base + 5161 - $
+op_29:
+            assert (op_29 & 255) == 41
+; AND imm
+            ld a,(de)
+            inc de
+            and b
+            ld b,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 5184 - $
+op_40:
+            assert (op_40 & 255) == 64
+; RTI imp
+            ld hl,(rS)
+            inc l
+            ld a,(hl)
+            push af
+            inc l
+            ld e,(hl)
+            inc l
+            ld d,(hl)
+            ld a,l
+            ld (rS),a
+            ld hl,stop_s
+            cp (hl)
+            jr z,.x
+            ld l,d
+            ld h,RT>>8
+            ld d,(hl)
+            pop af
+            call setp
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+.x:
+            pop af
+            call setp
+            jp emu_exit
+            ds cpu_base + 5235 - $
+op_73:
+            assert (op_73 & 255) == 115
+; RRA indy
+            ex af,af'
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,ZPG>>8
+            ld a,(hl)
+            inc l
+            ld l,(hl)
+            add a,ixh
+            jr nc,$+3
+            inc l
+            ld h,WT>>8
+            ld h,(hl)
+            inc h
+            dec h
+            jr z,.s1
+.b1:
+            ld l,a
+            ex af,af'
+            ld a,ixl
+            rra
+            rr (hl)
+            rla
+            ld ixl,a
+            ld a,(hl)
+            call do_adc
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+.s1:
+            call wslow_R
+            jr .b1
+            ds cpu_base + 5298 - $
+op_B2:
+            assert (op_B2 & 255) == 178
+; KIL / nem támogatott
+            jp emu_brk
+            ds cpu_base + 5325 - $
+op_CD:
+            assert (op_CD & 255) == 205
+; CMP abs
+            ex de,hl
+            ld a,(hl)
+            inc hl
+            ld e,(hl)
+            inc hl
+            ex de,hl
+            ld h,RT>>8
+            ld h,(hl)
+            ld l,a
+            ld a,(hl)
+            ld l,a
+            ld a,b
+            sub l
+            ccf
+            rla
+            ld ixl,a
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
+            ds cpu_base + 5352 - $
+op_E8:
+            assert (op_E8 & 255) == 232
+; INX imp
+            inc c
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
             ds cpu_base + 5394 - $
 op_12:
             assert (op_12 & 255) == 18
@@ -5208,6 +5241,18 @@ op_8C:
 .s1:
             call wslow_Y
             jr .b1
+            ds cpu_base + 5584 - $
+op_D0:
+            assert (op_D0 & 255) == 208
+; BNE rel
+            jp nz,br_taken
+            inc de
+            ld a,(de)
+            inc de
+            ld l,a
+            ld h,OPHI>>8
+            ld h,(hl)
+            jp (hl)
             ds cpu_base + 5609 - $
 op_E9:
             assert (op_E9 & 255) == 233

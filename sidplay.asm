@@ -159,6 +159,7 @@ main:
             ld (sid_reset.psel1 + 1), a       ; a portcímek a kódba
             ld (sid_out.psel + 1), a
             ld (wslow_A.psel4 + 1), a
+            ld (sid_fast.psel + 1), a
             ld (sid_out.psel2 + 1), a
             ld (sid_out.psel3 + 1), a
             ld (play_file.psel3 + 1), a
@@ -166,6 +167,7 @@ main:
             ld (sid_reset.pdat1 + 1), a
             ld (sid_out.pdat + 1), a
             ld (wslow_A.pdat4 + 1), a
+            ld (sid_fast.pdat + 1), a
             ld (sid_out.pdat2 + 1), a
             ld (sid_out.pdat3 + 1), a
             ld (play_file.pdat3 + 1), a
@@ -291,12 +293,15 @@ play_file:
             ld a, (V_PORT05)
             ld (saved_p05), a
             call calc_speed         ; a fejlécből, mielőtt a helyére csúszik a zene
-            ld hl, wslow_A.inl      ; a SID-írás gyors útja: PAL közvetlen, NTSC
-            ld a, (ntsc)            ; átszámolással
+            ld hl, wslow_A.inl      ; a SID-írás gyors útjai: PAL közvetlen, NTSC
+            ld de, sid_fast.inl     ; átszámolással
+            ld a, (ntsc)
             or a
             jr z, .sw
             ld hl, wslow_A.conv
+            ld de, sid_fast.conv
 .sw:        ld (wslow_A.sw + 1), hl
+            ld (sid_fast.sw + 1), de
             di
             ld a, PAGE_RUN
             ld (V_PAGING), a
@@ -1182,6 +1187,23 @@ ws_scratch: pop bc
             ld hl, SCRATCH
             ld a, l
             ret
+; STA $D4xx gyors útja (a generált kódból): A = alsó bájt, B = érték.
+; Elrontja: A, H, L
+sid_fast:   and 1Fh
+            cp SID_REGS
+            ret nc
+.sw:        jp .inl                 ; NTSC zenénél: jp .conv (play_file írja át)
+.inl:       add a, REG_VSID
+.psel:      out (0), a
+            ld a, b
+.pdat:      out (0), a
+            ret
+.conv:      push bc
+            ld h, b
+            call sid_out
+            pop bc
+            ret
+
 ; A = SID-regiszter (0..24), H = érték -> a kártya vSID-je.
 ; NTSC zenénél a hangmagasság (0/1, 7/8, 14/15) a PAL órajelű vSID-hez
 ; átszámolva: f * 1022727 / 985248 = f * 1,03804 (f + f/32 + f/128 - f/1024).

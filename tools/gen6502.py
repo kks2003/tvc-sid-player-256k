@@ -80,9 +80,14 @@ def write_ptr(mode, var):
         raise ValueError(mode)
     _lab[0] += 1
     s, b = ".s%d" % _lab[0], ".b%d" % _lab[0]
+    sid = []
+    if var == "A" and mode in ("abs", "absx", "absy"):
+        # STA $D4xx: közvetlenül a SID-be (a lejátszók legtöbb SID-írása ilyen)
+        a = a + ["ld h,a", "ld a,l", "cp 0D4h", "jr z,.sid", "ld a,h"]
+        sid = [".sid:", "ld a,h", "call sid_fast", "ex af,af'"] + NEXT
     code = EXA + a + ["ld h,WT>>8", "ld h,(hl)", "inc h", "dec h", "jr z," + s,
                       b + ":", "ld l,a"] + EXA
-    slow = [s + ":", "call wslow_" + var, "jr " + b]
+    slow = [s + ":", "call wslow_" + var, "jr " + b] + sid
     return code, slow
 
 ALU = {   # A = érték; a végén F = N, Z
