@@ -2,6 +2,8 @@
 """Kis teszt-SID (PSID v2) készítése: 8 hangos fűrészfog-skála, 32 képkockánként
 új hang. A végén a $D400-as regiszterírásokból ellenőrizhető a lejátszó.
     python3 test/make_test_sid.py kimenet.sid [--cia T] [--songs N]
+--ntsc: NTSC órajelű (a fejléc jelzője). --pad K: K KB kitöltés a kód és a
+hangtáblák közé, így a táblák a fájl végére kerülnek (nagy fájl teszt).
 --cia T: CIA-időzítésű (speed bit = 1), az init a $DC04/$DC05-be T-t ír
 (985248 / (T + 1) Hz). --songs N: N dal, a dal sorszáma a kezdőhang (A = dal - 1).
 """
@@ -11,6 +13,9 @@ ap = argparse.ArgumentParser()
 ap.add_argument("out")
 ap.add_argument("--cia", type=int, default=0)
 ap.add_argument("--songs", type=int, default=1)
+ap.add_argument("--ntsc", action="store_true", help="a fejléc órajele NTSC")
+ap.add_argument("--pad", type=int, default=0,
+                help="ennyi KB kitöltés a kód és a hangtáblák közé (nagy fájl teszt)")
 args = ap.parse_args()
 
 LOAD = 0x1000
@@ -48,6 +53,7 @@ lab("ret"); b(0x60)
 lab("gate")
 b(0xA9, 0x21, 0x8D, 0x04, 0xD4, 0x60)
 notes = [0x1167, 0x1389, 0x15ED, 0x173B, 0x1A13, 0x1D45, 0x20DA, 0x22CE]   # C4..C5 (PAL)
+code.extend(bytes(args.pad * 1024))
 lab("flo"); b(*[n & 255 for n in notes])
 lab("fhi"); b(*[n >> 8 for n in notes])
 for pos, n in fix:
@@ -65,4 +71,6 @@ struct.pack_into(">HHHHHHHI", hdr, 4, 2, 0x7C, LOAD, 0, LOAD + 3, args.songs, 1,
 hdr[0x16:0x16 + 9] = b"TVC teszt"
 hdr[0x36:0x36 + 6] = b"Claude"
 hdr[0x56:0x56 + 4] = b"2026"
+if args.ntsc:
+    hdr[0x77] = 0x08                   # órajel: NTSC
 open(args.out, "wb").write(bytes(hdr) + bytes(code))

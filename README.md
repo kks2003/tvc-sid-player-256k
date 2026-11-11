@@ -31,10 +31,10 @@ Lejátszás közben:
 - **ESC** vagy **SPACE**: vissza a fájlválasztóhoz.
 
 Kell: Python 3, [sjasmplus](https://github.com/z00m128/sjasmplus). A gépen:
-TVC 64k (a U3 RAM-ot is használja) és TVC256k++ kártya (az 1., 2., 3. vagy
-0. slotban, a lejátszó megkeresi). A zene indulásakor kiírja a nevét, a
-szerzőt, a kiadást, a betöltési címet és a dal számát. A beolvasható fájl
-mérete a HIMEM-ig tart (kb. 28 KB), a zene mellett a U3 16 KB-ja marad munkaterületnek.
+TVC 64k és TVC256k++ kártya (az 1., 2., 3. vagy 0. slotban, a lejátszó
+megkeresi). A zene indulásakor kiírja a nevét, a szerzőt, a kiadást, a
+betöltési címet és a dal számát. A `.sid` fájl legfeljebb kb. 45 KB lehet;
+ami a zene után marad a 64 KB-ból, az a 6502 munkaterülete.
 
 ## Hogyan működik
 
@@ -46,9 +46,14 @@ mérete a HIMEM-ig tart (kb. 28 KB), a zene mellett a U3 16 KB-ja marad munkater
   dokumentált utasítás, decimális mód, és a lejátszókban előforduló nem
   dokumentáltak: LAX, SAX, DCP, ISC, SLO, RLA, SRE, RRA, ANC, ALR, SBX, NOP-ok).
 - A 6502 64 KB-os címtere 256 bájtos lapokban. A zene a beolvasási
-  pufferben marad (lapra igazítva), a többi lap igény szerint foglalódik
-  (a U3, majd a zene fölötti szabad RAM). A `$D400-$D7FF` írása a SID-be
-  megy, az OSC3 hívásonként visszaolvasva.
+  pufferben marad (`$4E00`-tól, lapra igazítva), a többi lap igény szerint
+  foglalódik a zene fölött. A `$D400-$D7FF` írása a SID-be megy, az OSC3
+  hívásonként visszaolvasva.
+- A `$8000-$FFFF` tartományba a betöltés és a lejátszás idejére a kártya
+  két gyors RAM-lapja (14., 15.) lapozódik be (`$B0`/`$B1` regiszter), így
+  a TVC saját U2/U3 RAM-ja (a BASIC területe) érintetlen marad. A fájl
+  `$C000` alatti része az IO RAM-on át jön (FREAD), a többi egyben,
+  közvetlenül a kártya RAM-jába (FREAD_DEST).
 - A lejátszócím a fejlécből, vagy ha 0, az init által beállított
   IT-vektorból (`$0314` vagy `$FFFE`); a kernal IT-kilépési pontjai
   (`$EA31`, `$EA81`, `$FEBC`) kis csonkok.
@@ -89,6 +94,19 @@ csinálja), kilépéskor visszaáll.
   gyorsabb, és minden 2. (3. ...) hív.
 
 Emulátorban mérve: VBI 50,12 Hz, CIA T = 8192 mellett 120 Hz (elvárt 120,3).
+
+## NTSC zenék
+
+Ha a PSID fejléc (v2+, `$76-$77` jelzők) NTSC órajelet ír:
+
+- VBI-zenénél 59,83 Hz a hívás (az NTSC C64 képkockája),
+- CIA-zenénél 1022727 / (T + 1) Hz (alapértéke a kernal NTSC 60 Hz-e),
+- a hangmagasság-regiszterek (`$D400/01`, `$D407/08`, `$D40E/0F`) a PAL
+  órajelű vSID-hez átszámolva: f × 1,038 (f + f/32 + f/128 − f/1024), így a
+  hangok nem szólnak 3,8%-kal mélyebben.
+
+A burkológörbék (ADSR) és a szűrő az NTSC és a PAL órajel közti 3,8%-os
+különbséget nem követik, ez hallhatóan nem számít.
 
 ## Korlátok
 

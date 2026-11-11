@@ -24,7 +24,6 @@ P_KBDIN     equ 58h
 V_PAGING    equ 0003h
 V_PORT03    equ 0B11h
 IRQVEC      equ 0038h
-V_HIMEM     equ 0B19h
 IO_PARAM    equ 0D900h          ; a kártya IO RAM-ja a slot IOMEM-jében
 IO_RESULT   equ 0DA00h
 IO_ATTR     equ 0DB00h
@@ -42,7 +41,16 @@ P_TGRESET   equ 5Bh             ; olvasás: a hanggenerátor alaphelyzetbe
 P_CRTCSEL   equ 70h
 P_CRTCDAT   equ 71h
 VBI_X       equ 3897            ; 195312,5 / 50,1245 Hz (PAL C64 képkocka)
-CIA_DEFAULT equ 4025h           ; a kernal CIA1 időzítője (~60 Hz)
+VBI_X_NTSC  equ 3265            ; 195312,5 / 59,826 Hz (NTSC C64 képkocka)
+CIA_DEFAULT equ 4025h           ; a kernal CIA1 időzítője (~60 Hz, PAL)
+CIA_DEF_NTSC equ 4295h          ; ugyanez NTSC gépen
+CIA_MUL     equ 12992           ; 65536 * 195312,5 / 985248 (PAL órajel)
+CIA_MUL_NTSC equ 12515          ; 65536 * 195312,5 / 1022727 (NTSC órajel)
+REG_MEM_P2  equ 0B0h            ; a kártya gyors RAM-lapja a U2-be / U3-ba
+REG_MEM_P3  equ 0B1h
+CARD_PG2    equ 14              ; lejátszás alatt: a zene $8000-$FFFF része
+CARD_PG3    equ 15
+BUF_END     equ 0FF00h          ; a fájl vége legfeljebb (a lapra igazítás miatt)
 
 REG_VSID    equ 0E0h
 SID_REGS    equ 25
@@ -149,13 +157,15 @@ main:
             ret
 .found:     ld a, c
             ld (sid_reset.psel1 + 1), a       ; a portcímek a kódba
-            ld (wslow_v.psel2 + 1), a
-            ld (wslow_A.psel4 + 1), a
+            ld (sid_out.psel + 1), a
+            ld (sid_out.psel2 + 1), a
+            ld (sid_out.psel3 + 1), a
             ld (play_file.psel3 + 1), a
             inc a
             ld (sid_reset.pdat1 + 1), a
-            ld (wslow_v.pdat2 + 1), a
-            ld (wslow_A.pdat4 + 1), a
+            ld (sid_out.pdat + 1), a
+            ld (sid_out.pdat2 + 1), a
+            ld (sid_out.pdat3 + 1), a
             ld (play_file.pdat3 + 1), a
             inc a
             ld c, a
@@ -168,16 +178,8 @@ main:
             add a, a
             add a, a
             ld (card_slot6), a
-            ld a, (V_HIMEM + 1)     ; a beolvasási puffer vége: a HIMEM alatt
-            cp 0C0h
-            jr c, .him
-            ld a, 0C0h
-.him:       dec a
-            ld (pool_top), a        ; eddig foglalhatók lapok
-            sub 2                   ; a fájl a lapra igazításhoz feljebb csúszhat
-            ld (buf_limit + 1), a
-            xor a
-            ld (buf_limit), a
+            ld a, (V_PAGING)        ; az eredeti lapozás (a lejátszás után vissza)
+            ld (saved_paging), a
             jp browser
 
 ; ---- egy beolvasott .sid lejátszása (sidbuf .. sidend) ----------------------
@@ -286,8 +288,6 @@ play_file:
 
             ld a, (V_PORT05)
             ld (saved_p05), a
-            ld a, (V_PAGING)
-            ld (saved_paging), a
             call calc_speed         ; a fejlécből, mielőtt a helyére csúszik a zene
             di
             ld a, PAGE_RUN
@@ -541,6 +541,20 @@ calc_speed:
             ld a, 0
             rla
             ld (cia_mode), a
+            xor a                   ; PSID v2+: a $76-$77 jelzőszó 2-3. bitje az
+            ld (ntsc), a            ; órajel (01 PAL, 10 NTSC, 11 mindkettő)
+            ld a, (sidbuf + 5)
+            cp 2
+            ret c
+            ld a, (sidbuf + 7)
+            cp 7Ch
+            ret c
+            ld a, (sidbuf + 77h)
+            and 0Ch
+            cp 08h
+            ret nz
+            ld a, 1
+            ld (ntsc), a
             ret
 timer_start:
             ld a, 1
@@ -553,14 +567,29 @@ timer_update:
             ld a, (cia_mode)
             or a
             ld hl, VBI_X
+            ld a, (ntsc)
+            or a
+            jr z, .vp
+            ld hl, VBI_X_NTSC
+.vp:        ld a, (cia_mode)
+            or a
             jr z, .x
             ld hl, (cia_lo)         ; x = (T + 1) * 12992 / 65536
             ld a, h
             or l
             jr nz, .t
             ld hl, CIA_DEFAULT
+            ld a, (ntsc)
+            or a
+            jr z, .t
+            ld hl, CIA_DEF_NTSC
 .t:         inc hl
-            ld de, 12992
+            ld de, CIA_MUL
+            ld a, (ntsc)
+            or a
+            jr z, .m
+            ld de, CIA_MUL_NTSC
+.m:
             call mul16              ; DEHL = HL * DE
             ex de, hl               ; HL = a felső szó
 .x:         ld c, 1                 ; IT-osztó: x / k <= 4090
@@ -765,17 +794,13 @@ mem_init:
             ld (INV + (ZPG >> 8)), a
             inc a
             ld (INV + (STKPG >> 8)), a
-            ; a lapkészlet: U3, majd a zene fölött a HIMEM-ig
+            ; a lapkészlet: a zene fölött a memória tetejéig (a kártya lapjai)
             ld hl, pool_ranges
-            ld (hl), 0C0h
-            inc hl
-            ld (hl), 0FFh
-            inc hl
             ld a, (sidend + 1)
             inc a
             ld (hl), a
             inc hl
-            ld a, (pool_top)
+            ld a, 0FFh
             ld (hl), a
             dec hl
             cp (hl)                 ; üres tartomány?
@@ -1085,10 +1110,10 @@ wslow_A:    ld h, a                 ; gyors út: STA a SID-be ($D400-$D7FF)
             and 1Fh
             cp SID_REGS
             jr nc, .scr
-            add a, REG_VSID
-.psel4:     out (0), a
-            ld a, b
-.pdat4:     out (0), a
+            push bc
+            ld h, b
+            call sid_out
+            pop bc
 .scr:       ld hl, SCRATCH
             ld a, l
             ret
@@ -1111,9 +1136,9 @@ wslow_v:    ld h, a                 ; H = az írandó érték
             ld c, a                 ; C = alsó bájt
             ld a, l
             cp 0D0h
-            jr c, ws_ram
+            jp c, ws_ram
             cp 0E0h
-            jr nc, ws_ram
+            jp nc, ws_ram
             cp 0DCh                 ; CIA1 A időzítő ($DC04/$DC05): a tempó
             jr nz, .nocia
             ld a, c
@@ -1137,14 +1162,93 @@ wslow_v:    ld h, a                 ; H = az írandó érték
             and 1Fh
             cp SID_REGS
             jr nc, ws_scratch
-            add a, REG_VSID
-.psel2:      out (0), a
-            ld a, h
-.pdat2:      out (0), a
+            call sid_out
 ws_scratch: pop bc
             ld hl, SCRATCH
             ld a, l
             ret
+; A = SID-regiszter (0..24), H = érték -> a kártya vSID-je.
+; NTSC zenénél a hangmagasság (0/1, 7/8, 14/15) a PAL órajelű vSID-hez
+; átszámolva: f * 1022727 / 985248 = f * 1,03804 (f + f/32 + f/128 - f/1024).
+; Elrontja: A, B, C, H, L
+sid_out:    ld c, a
+            ld a, (ntsc)
+            or a
+            jr z, .raw
+            ld a, c
+            cp 16
+            jr nc, .raw
+            ld b, 0
+            push hl
+            ld hl, freq_lo
+            add hl, bc
+            ld a, (hl)              ; a hangmagasság alsó bájtjának regisztere
+            pop hl
+            cp 0FFh
+            jr z, .raw
+            push de
+            ld e, a
+            ld a, h
+            ld hl, sid_sh           ; a megírt bájt az árnyékba
+            add hl, bc
+            ld (hl), a
+            ld c, e
+            ld hl, sid_sh
+            add hl, bc
+            ld a, (hl)
+            inc hl
+            ld h, (hl)
+            ld l, a                 ; HL = f
+            ld d, h
+            ld e, l
+            srl d                   ; f / 32
+            rr e
+            srl d
+            rr e
+            srl d
+            rr e
+            srl d
+            rr e
+            srl d
+            rr e
+            add hl, de
+            jr c, .max
+            srl d                   ; f / 128
+            rr e
+            srl d
+            rr e
+            add hl, de
+            jr c, .max
+            srl d                   ; f / 1024
+            rr e
+            srl d
+            rr e
+            srl d
+            rr e
+            or a
+            sbc hl, de
+            jr .out
+.max:       ld hl, 0FFFFh
+.out:       pop de
+            ld a, c
+            add a, REG_VSID
+.psel2:     out (0), a
+            ld a, l
+.pdat2:     out (0), a
+            ld a, c
+            add a, REG_VSID + 1
+.psel3:     out (0), a
+            ld a, h
+.pdat3:     out (0), a
+            ret
+.raw:       ld a, c
+            add a, REG_VSID
+.psel:      out (0), a
+            ld a, h
+.pdat:      out (0), a
+            ret
+freq_lo:    db 0, 0, 0FFh, 0FFh, 0FFh, 0FFh, 0FFh, 7, 7, 0FFh, 0FFh, 0FFh, 0FFh, 0FFh, 14, 14
+
 ; olvasás-módosítás-írás: az I/O-ba nem ír
 wslow_R:    push bc
             ld c, a
@@ -1152,10 +1256,10 @@ wslow_R:    push bc
             cp 0D0h
             jr c, ws_ram
             cp 0E0h
-            jr c, ws_scratch
+            jp c, ws_scratch
 ws_ram:     ld a, l
             call alloc_page
-            jr z, ws_scratch
+            jp z, ws_scratch
             ld h, a
             ld l, c
             ld a, c
@@ -1320,7 +1424,8 @@ browser:    xor a
             ld e, '>'
             call draw_mark
             jp .loop
-.quit:      call cls
+.quit:      call unmap_card
+            call cls
             ld hl, 0
             ret
 .drive:     ld a, REG_DRIVE         ; a következő meghajtó: USB, PSRAM, flash
@@ -1574,6 +1679,20 @@ wait_release:
             jr nz, wait_release
             ret
 
+; a kártya gyors RAM-lapjai a U2-be és a U3-ba (a TVC saját RAM-ja helyett)
+map_card:   ld b, CARD_PG2
+            ld a, REG_MEM_P2
+            call reg_write
+            ld b, CARD_PG3
+            ld a, REG_MEM_P3
+            jp reg_write
+unmap_card: ld b, 0FFh
+            ld a, REG_MEM_P2
+            call reg_write
+            ld b, 0FFh
+            ld a, REG_MEM_P3
+            jp reg_write
+
 ; a kártya A. regiszterének olvasása (A-ba) / írása (B)
 reg_read:   push bc
             ld b, a
@@ -1713,7 +1832,11 @@ is_sid:     ld b, 0
             ret
 
 ; a namebuf nevű fájl beolvasása a sidbuf-ba; Cy = 1: hiba (kiírva)
-load_file:  call io_on
+; A $8000 feletti rész a kártya gyors RAM-jában van (CARD_PG2/CARD_PG3 a U2-ben
+; és a U3-ban): a $C000 alatti rész az IO RAM-on át (FREAD, a U2 közben is
+; látszik), a $C000 fölötti egyben, közvetlenül a kártya RAM-jába (FREAD_DEST).
+load_file:  call map_card
+            call io_on
             ld hl, IO_PARAM
             ld (hl), 01h            ; FA_READ
             inc hl
@@ -1740,52 +1863,86 @@ load_file:  call io_on
             ld de, fileh
             ld bc, 4
             ldir
+            ld hl, (IO_RESULT + 4)  ; a fájl mérete
+            ld (fsize), hl
+            ld hl, (IO_RESULT + 6)
             call io_off
-            ld hl, sidbuf
-            ld (dest), hl
-.rd:        ld hl, fileh
-            call put_handle
-            call io_on
-            ld hl, CHUNK
-            ld (IO_PARAM + 4), hl
-            call io_off
-            ld a, 03h               ; MSC_FREAD (a fájl végén hibát is adhat)
-            call card_cmd
-            jr nz, .eof
-            call io_on
-            ld bc, (IO_RESULT)
-            ld a, b
-            or c
-            jr z, .eofio
-            ld hl, (dest)
-            add hl, bc
-            ex de, hl
-            ld hl, (buf_limit)
+            ld a, h                 ; 64 KB fölött biztosan túl nagy
+            or l
+            jp nz, .big
+            ld hl, (fsize)
+            ld de, sidbuf
+            add hl, de
+            jp c, .big
+            ex de, hl               ; DE = a fájl vége a memóriában
+            ld hl, BUF_END
             or a
             sbc hl, de
-            jr c, .big
-            ld hl, IO_RESULT + 2
-            ld de, (dest)
-            push bc
-            ldir
-            pop bc
-            ld (dest), de
-            call io_off
+            jp c, .big
+            ld (sidend), de
+            ld hl, sidbuf
+            ld (dest), hl
+.rd:        ld hl, (sidend)         ; maradék = vég - dest; n = min(maradék,
+            ld de, (dest)           ; CHUNK, $C000 - dest)
+            or a
+            sbc hl, de
+            jp z, .done
+            ld b, h
+            ld c, l
+            ld hl, 0C000h
+            or a
+            sbc hl, de
+            jr z, .dst              ; $C000-tól: egyben a kártya RAM-jába
+            call .min
             ld hl, CHUNK
+            call .min
+            push bc
+            ld hl, fileh
+            call put_handle
+            call io_on
+            pop bc
+            push bc
+            ld (IO_PARAM + 4), bc
+            call io_off
+            ld a, 03h               ; MSC_FREAD
+            call card_cmd
+            pop bc
+            jr nz, .short
+            call io_on
+            ld hl, (IO_RESULT)
             or a
             sbc hl, bc
-            jr z, .rd               ; teljes darab: van még
-            jr .eof
-.big:       call io_off
-            call .close
-            ld hl, s_toolarge
-            call prstr
-            scf
-            ret
-.eofio:     call io_off
-.eof:       call .close
+            jr nz, .shortio         ; kevesebbet adott, mint kértük
+            ld hl, IO_RESULT + 2
+            ld de, (dest)
+            ldir
+            ld (dest), de
+            call io_off
+            jr .rd
+.dst:       push bc                 ; BC = a maradék, a $C000 fölötti rész
+            ld hl, fileh
+            call put_handle
+            call io_on
+            pop bc
+            push bc
+            ld (IO_PARAM + 4), bc   ; 3 bájtos hossz
+            xor a
+            ld (IO_PARAM + 6), a
+            ld hl, (dest)           ; cél: CARD_PG3 * 16K + (dest - $C000),
+            ld (IO_PARAM + 7), hl   ; a 15. lapnál ez 3:dest
+            ld a, 3
+            ld (IO_PARAM + 9), a
+            assert CARD_PG3 == 15
+            call io_off
+            ld a, 09h               ; MSC_FREAD_DEST
+            call card_cmd
+            pop bc
+            jr nz, .short
             ld hl, (dest)
-            ld (sidend), hl
+            add hl, bc
+            ld (dest), hl
+.done:      call .close
+            ld hl, (sidend)
             ld de, sidbuf + 7Ch     ; legalább egy fejléc
             or a
             sbc hl, de
@@ -1793,6 +1950,25 @@ load_file:  call io_on
             ld hl, s_badfile
             call prstr
             scf
+            ret
+.shortio:   call io_off
+.short:     call .close
+            ld hl, s_readerr
+            call prstr
+            scf
+            ret
+.big:       call .close
+            ld hl, s_toolarge
+            call prstr
+            scf
+            ret
+; BC = min(BC, HL)
+.min:       or a
+            sbc hl, bc
+            ret nc
+            add hl, bc
+            ld b, h
+            ld c, l
             ret
 .close:     ld hl, fileh
             call put_handle
@@ -1828,6 +2004,7 @@ draw_row:   db 0
 draw_dir:   db 0
 s_notfound: db "Nincs ilyen fajl!", 13, 10, 0
 s_toolarge: db "Tul nagy fajl!", 13, 10, 0
+s_readerr:  db "Olvasasi hiba!", 13, 10, 0
 s_sep:      db "  ", 0
 s_dot:      db 2, "./"
 s_ext:      db ".sid", 0
@@ -1842,7 +2019,10 @@ cia_hi:     db 0
 it_div:     db 1
 it_cnt:     db 1
 card_slot6: db 0
-buf_limit:  dw 0
+fsize:      dw 0
+ntsc:       db 0
+            align 256
+sid_sh:     ds 16                   ; a hangmagasság-regiszterek árnyéka (NTSC)
 sidend:     dw 0
 song_req:   db 0
 dirh:       ds 4
@@ -1898,7 +2078,6 @@ pending:    db 0
 wd_start:   db 0
 irq_on:     db 0
 irq_save:   ds 3
-pool_top:   db 0
 img_z80:    dw 0
 SCRATCH:    db 0
 
