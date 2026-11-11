@@ -158,12 +158,14 @@ main:
 .found:     ld a, c
             ld (sid_reset.psel1 + 1), a       ; a portcímek a kódba
             ld (sid_out.psel + 1), a
+            ld (wslow_A.psel4 + 1), a
             ld (sid_out.psel2 + 1), a
             ld (sid_out.psel3 + 1), a
             ld (play_file.psel3 + 1), a
             inc a
             ld (sid_reset.pdat1 + 1), a
             ld (sid_out.pdat + 1), a
+            ld (wslow_A.pdat4 + 1), a
             ld (sid_out.pdat2 + 1), a
             ld (sid_out.pdat3 + 1), a
             ld (play_file.pdat3 + 1), a
@@ -289,6 +291,12 @@ play_file:
             ld a, (V_PORT05)
             ld (saved_p05), a
             call calc_speed         ; a fejlécből, mielőtt a helyére csúszik a zene
+            ld hl, wslow_A.inl      ; a SID-írás gyors útja: PAL közvetlen, NTSC
+            ld a, (ntsc)            ; átszámolással
+            or a
+            jr z, .sw
+            ld hl, wslow_A.conv
+.sw:        ld (wslow_A.sw + 1), hl
             di
             ld a, PAGE_RUN
             ld (V_PAGING), a
@@ -413,9 +421,10 @@ play_file:
 .keys:      ld a, (cia_dirty)       ; a zene átírta a CIA időzítőt
             or a
             call nz, timer_update
-            ld hl, key_cnt          ; ESC/SPACE minden 2., a dalválasztók minden
+            ld hl, key_cnt          ; ESC/SPACE minden 4., a dalválasztók minden
             dec (hl)                ; 8. hívásnál (a billentyűolvasás is idő)
-            bit 0, (hl)
+            ld a, (hl)
+            and 3
             jp nz, .frame
             call read_keys
             cp KEYMASK
@@ -1110,7 +1119,13 @@ wslow_A:    ld h, a                 ; gyors út: STA a SID-be ($D400-$D7FF)
             and 1Fh
             cp SID_REGS
             jr nc, .scr
-            push bc
+.sw:        jp .inl                 ; NTSC zenénél: jp .conv (play_file írja át)
+.inl:       add a, REG_VSID         ; PAL: közvetlenül a kártyára
+.psel4:     out (0), a
+            ld a, b
+.pdat4:     out (0), a
+            jr .scr
+.conv:      push bc
             ld h, b
             call sid_out
             pop bc
