@@ -75,9 +75,12 @@ kb. 600 utasítás fér el. Ami ezt adja:
   kb. 5000 ciklus), ez figyeli az időkorlátot is (végtelen ciklus ellen).
 - Ha egy hívás kicsúszik az időből, a következő rövidebbek behozzák.
 
+- A `STA $D4xx` (abszolút és indexelt) a lassú út helyett közvetlenül a
+  kártyára ír: a lejátszók hívásonként 20-30-szor írnak a SID-be.
+
 Emulátorban mérve (a SID-regiszterírások sorozata bájtra egyezik egy PC-s
 6502-emulátoréval): Commando (250-340 utasítás/hívás) és Golden Axe 1. dal
-(átlag 586, legfeljebb 668 utasítás/hívás) teljes tempóban megy. Ennél
+(átlag 583, legfeljebb 668 utasítás/hívás) teljes tempóban megy. Ennél
 nehezebb lejátszórutinnál a zene lelassul.
 
 ## Tempó
