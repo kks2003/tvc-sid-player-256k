@@ -60,16 +60,20 @@ ami a zene után marad a 64 KB-ból, az a 6502 munkaterülete.
 
 ## Sebesség
 
-Egy 6502-es utasítás átlagosan kb. 100 Z80-ciklus, így egy időzítő-IT alatt
-kb. 600 utasítás fér el. Ami ezt adja:
+Egy 6502-es utasítás átlagosan kb. 95 Z80-ciklus (az emulátor szerint, a
+TVC memória-várakozásaival), így egy időzítő-IT alatt kb. 640 utasítás fér
+el. Ami ezt adja:
 
 - A kezelők címének alsó bájtja maga az opkód, a felső egy 256 bájtos
   táblából jön (`LD A,(DE)` / `INC DE` / `LD L,A` / `LD H,OPHI` /
   `LD H,(HL)` / `JP (HL)`). Ehhez a `build.sh` két menetben fordít: az első
   megméri a kezelőket, a második elpakolja őket.
+- Az elágazás táblájának lapja állandóan a C regiszterben van (`LD H,C`).
 - A 6502 N és Z jelzője a Z80 jelzőiben él (ahol a címszámítás elrontaná,
-  ott `EX AF,AF'` védi), az átvitel az IXl-ben, A a B-ben, X a C-ben, Y az
-  IXh-ban.
+  ott `EX AF,AF'` védi), A a B-ben, X az IXl-ben, Y az IXh-ban, az átvitel
+  a memóriában.
+- Az indexelt címzés ritka lapátlépésének javítása a kezelő végén van, a
+  fő úton csak egy nem teljesülő `JR C`.
 - A zene lapjai a Z80 memóriájában is folytonosak, ezért a PC sima `INC DE`.
 - Lejátszás alatt saját, rövid IT-kezelő fut a ROM-é helyett (az hívásonként
   kb. 5000 ciklus), ez figyeli az időkorlátot is (végtelen ciklus ellen).
@@ -80,8 +84,10 @@ kb. 600 utasítás fér el. Ami ezt adja:
 
 Emulátorban mérve (a SID-regiszterírások sorozata bájtra egyezik egy PC-s
 6502-emulátoréval): Commando (250-340 utasítás/hívás) és Golden Axe 1. dal
-(átlag 583, legfeljebb 668 utasítás/hívás) teljes tempóban megy. Ennél
-nehezebb lejátszórutinnál a zene lelassul.
+(átlag 583, legfeljebb 668 utasítás/hívás) teljes tempóban megy. A Cybernoid
+II (Jeroen Tel) 1. dala 2 percig mérve: az első percben teljes tempó, utána,
+ahol hívásonként átlag 633-644 utasítás fut, 10 mp-es szakaszonként legfeljebb
+1,3%-kal lassabb. Ennél nehezebb lejátszórutinnál a zene jobban lelassul.
 
 ## Tempó
 
@@ -115,7 +121,7 @@ különbséget nem követik, ez hallhatóan nem számít.
 
 - Csak PSID-szerű zenék; az RSID-k (CIA/VIC IT, kernal hívások) általában nem.
 - A digis (mintás, `$D418`-as) zenék és a 2SID/3SID nem.
-- Ha a lejátszórutin tartósan tovább fut egy időzítő-IT-nél (kb. 600
+- Ha a lejátszórutin tartósan tovább fut egy időzítő-IT-nél (kb. 640
   utasítás fölött), a zene lassul.
 
 ## Teszt
