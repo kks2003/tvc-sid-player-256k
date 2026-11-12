@@ -86,14 +86,17 @@ def write_ptr(mode, var):
         raise ValueError(mode)
     _lab[0] += 1
     s, b = ".s%d" % _lab[0], ".b%d" % _lab[0]
-    sid = []
-    if var == "A" and mode in ("abs", "absx", "absy"):
-        # STA $D4xx: közvetlenül a SID-be (a lejátszók legtöbb SID-írása ilyen)
-        a = a + ["ld h,a", "ld a,l", "cp 0D4h", "jr z,.sid", "ld a,h"]
-        sid = [".sid:", "ld a,h", "call sid_fast", "ex af,af'"] + NEXT
     code = EXA + a + ["ld h,WT>>8", "ld h,(hl)", "inc h", "dec h", "jr z," + s,
                       b + ":", "ld l,a"] + EXA
-    slow = [s + ":", "call wslow_" + var, "jr " + b] + sid
+    if var == "A" and mode in ("abs", "absx", "absy"):
+        # STA $D4xx: a lassú úton (WT = 0) elsőként a SID: közvetlenül a kártyára.
+        # Itt A = alsó bájt, L = a 6502-es lap.
+        g = ".g%d" % _lab[0]
+        slow = [s + ":", "ld h,a", "ld a,l", "cp 0D4h", "jr nz," + g, "ld a,h",
+                "call sid_fast", "ex af,af'"] + NEXT + \
+               [g + ":", "ld a,h", "call wslow_A", "jr " + b]
+    else:
+        slow = [s + ":", "call wslow_" + var, "jr " + b]
     return code, slow
 
 ALU = {   # A = érték; a végén F = N, Z
@@ -230,8 +233,8 @@ def body(code):
     if mn in BRMEM:
         t, cc = BRMEM[mn]
         return EXA + t + ["jp %s,br_taken_alt" % cc] + EXA + ["inc de"] + NEXT
-    if mn == "JMP" and mode == "abs":
-        return FA + ["ld h,RT>>8", "ld h,(hl)", "ld l,a", "ex de,hl"] + NEXT
+    if mn == "JMP" and mode == "abs":     # DE = RT[hi] : lo, közvetlenül
+        return ["ex de,hl", "ld e,(hl)", "inc hl", "ld l,(hl)", "ld h,RT>>8", "ld d,(hl)"] + NEXT
     if mn == "JMP":
         return FA + ["ld h,RT>>8", "ld h,(hl)", "ld l,a", "ld a,(hl)", "inc l", "ld l,(hl)",
                      "ld h,RT>>8", "ld h,(hl)", "ld l,a", "ex de,hl"] + NEXT
@@ -258,18 +261,17 @@ COMMON = """
 ; belépés: a regiszterek betöltve, DE = a PC (lásd sidplay.asm emu_run)
 emu_next:
 @NEXT@
-; elágazás: DE = az eltolás bájtja
-br_taken:   ex af,af'
+; elágazás: DE = az eltolás bájtja. Az előjel-kiterjesztés táblából, az
+; ADD HL,DE pedig az S és Z jelzőt (a 6502 N és Z-jét) nem bántja.
 br_taken_alt:
-            ld a,(de)
+            ex af,af'
+br_taken:   ld a,(de)
             inc de
             ld l,a
-            rla
-            sbc a,a
-            ld h,a
+            ld h,SEXT>>8
+            ld h,(hl)
             add hl,de
             ex de,hl
-            ex af,af'
 @NEXT@
 emu_exit_alt:
             ex af,af'
@@ -456,6 +458,8 @@ def main():
                     "            assert (op_%02X & 255) == %d" % (op, op)] + bodies[op]
             table[op] = "op_%02X >> 8" % op
         out += ["op_end:"]
+    out += ["", "; előjel-kiterjesztés az elágazásokhoz: 0..7Fh -> 0, 80h..FFh -> FFh",
+            "            align 256", "SEXT:", "            ds 128, 0", "            ds 128, 0FFh"]
     out += ["", "; az utasításkezelők címének felső bájtja (az alsó az opkód)",
             "            align 256", "OPHI:"]
     for i in range(0, 256, 8):

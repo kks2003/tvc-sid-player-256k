@@ -11,18 +11,17 @@ emu_next:
             ld h,c
             ld h,(hl)
             jp (hl)
-; elágazás: DE = az eltolás bájtja
-br_taken:   ex af,af'
+; elágazás: DE = az eltolás bájtja. Az előjel-kiterjesztés táblából, az
+; ADD HL,DE pedig az S és Z jelzőt (a 6502 N és Z-jét) nem bántja.
 br_taken_alt:
-            ld a,(de)
+            ex af,af'
+br_taken:   ld a,(de)
             inc de
             ld l,a
-            rla
-            sbc a,a
-            ld h,a
+            ld h,SEXT>>8
+            ld h,(hl)
             add hl,de
             ex de,hl
-            ex af,af'
             ld a,(de)
             inc de
             ld l,a
@@ -2123,11 +2122,6 @@ op_99:
             add a,ixh
             jr c,.c1
 .k1:
-            ld h,a
-            ld a,l
-            cp 0D4h
-            jr z,.sid
-            ld a,h
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -2144,9 +2138,10 @@ op_99:
             ld h,(hl)
             jp (hl)
 .s2:
-            call wslow_A
-            jr .b2
-.sid:
+            ld h,a
+            ld a,l
+            cp 0D4h
+            jr nz,.g2
             ld a,h
             call sid_fast
             ex af,af'
@@ -2156,6 +2151,10 @@ op_99:
             ld h,c
             ld h,(hl)
             jp (hl)
+.g2:
+            ld a,h
+            call wslow_A
+            jr .b2
 .c1:
             inc l
             jr .k1
@@ -4564,11 +4563,6 @@ op_9D:
             add a,ixl
             jr c,.c1
 .k1:
-            ld h,a
-            ld a,l
-            cp 0D4h
-            jr z,.sid
-            ld a,h
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -4585,9 +4579,10 @@ op_9D:
             ld h,(hl)
             jp (hl)
 .s2:
-            call wslow_A
-            jr .b2
-.sid:
+            ld h,a
+            ld a,l
+            cp 0D4h
+            jr nz,.g2
             ld a,h
             call sid_fast
             ex af,af'
@@ -4597,6 +4592,10 @@ op_9D:
             ld h,c
             ld h,(hl)
             jp (hl)
+.g2:
+            ld a,h
+            call wslow_A
+            jr .b2
 .c1:
             inc l
             jr .k1
@@ -5346,11 +5345,6 @@ op_8D:
             ld e,(hl)
             inc hl
             ex de,hl
-            ld h,a
-            ld a,l
-            cp 0D4h
-            jr z,.sid
-            ld a,h
             ld h,WT>>8
             ld h,(hl)
             inc h
@@ -5367,9 +5361,10 @@ op_8D:
             ld h,(hl)
             jp (hl)
 .s1:
-            call wslow_A
-            jr .b1
-.sid:
+            ld h,a
+            ld a,l
+            cp 0D4h
+            jr nz,.g1
             ld a,h
             call sid_fast
             ex af,af'
@@ -5379,6 +5374,10 @@ op_8D:
             ld h,c
             ld h,(hl)
             jp (hl)
+.g1:
+            ld a,h
+            call wslow_A
+            jr .b1
             ds cpu_base + 5870 - $
 op_EE:
             assert (op_EE & 255) == 238
@@ -5578,6 +5577,12 @@ op_52:
 ; KIL / nem támogatott
             jp emu_brk
 op_end:
+
+; előjel-kiterjesztés az elágazásokhoz: 0..7Fh -> 0, 80h..FFh -> FFh
+            align 256
+SEXT:
+            ds 128, 0
+            ds 128, 0FFh
 
 ; az utasításkezelők címének felső bájtja (az alsó az opkód)
             align 256
