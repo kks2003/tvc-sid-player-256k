@@ -22,9 +22,33 @@ def reference(path, calls, song=None):
     if init == 0:
         init = load
     w = []
+    ntsc = v >= 2 and off >= 0x7C and (d[0x77] & 0x0C) == 0x08
+    shadow = [0] * 32
+    FREQ = {0: 0, 1: 0, 7: 7, 8: 7, 14: 14, 15: 14}
+
+    def sid_write(a, val):
+        r = a & 0x1F
+        if r >= 25:
+            return
+        if ntsc and r in FREQ:          # a lejátszó átszámolása (sid_out)
+            shadow[r] = val
+            lo = FREQ[r]
+            f = shadow[lo] | shadow[lo + 1] << 8
+            q = f >> 5
+            g = f + q
+            if g <= 0xFFFF:
+                q >>= 2
+                g += q
+                if g <= 0xFFFF:
+                    g -= q >> 3
+            if g > 0xFFFF:
+                g = 0xFFFF
+            w.append((lo, g & 255))
+            w.append((lo + 1, g >> 8))
+        else:
+            w.append((r, val))
     mem = ObservableMemory()
-    mem.subscribe_to_write(range(0xD400, 0xD800),
-                           lambda a, v: w.append((a & 0x1F, v)) if (a & 0x1F) < 25 else None)
+    mem.subscribe_to_write(range(0xD400, 0xD800), sid_write)
     mem.subscribe_to_read(range(0xD000, 0xE000), lambda a: 0)
     m = MPU(memory=mem)
     for i, b in enumerate(data):

@@ -33,7 +33,7 @@ Lejátszás közben:
 Kell: Python 3, [sjasmplus](https://github.com/z00m128/sjasmplus). A gépen:
 TVC 64k és TVC256k++ kártya (az 1., 2., 3. vagy 0. slotban, a lejátszó
 megkeresi). A zene indulásakor kiírja a nevét, a szerzőt, a kiadást, a
-betöltési címet és a dal számát. A `.sid` fájl legfeljebb kb. 45 KB lehet;
+betöltési címet és a dal számát. A `.sid` fájl legfeljebb kb. 44 KB lehet;
 ami a zene után marad a 64 KB-ból, az a 6502 munkaterülete.
 
 ## Hogyan működik
@@ -46,7 +46,7 @@ ami a zene után marad a 64 KB-ból, az a 6502 munkaterülete.
   dokumentált utasítás, decimális mód, és a lejátszókban előforduló nem
   dokumentáltak: LAX, SAX, DCP, ISC, SLO, RLA, SRE, RRA, ANC, ALR, SBX, NOP-ok).
 - A 6502 64 KB-os címtere 256 bájtos lapokban. A zene a beolvasási
-  pufferben marad (`$4E00`-tól, lapra igazítva), a többi lap igény szerint
+  pufferben marad (`$5100`-tól, lapra igazítva), a többi lap igény szerint
   foglalódik a zene fölött. A `$D400-$D7FF` írása a SID-be megy, az OSC3
   hívásonként visszaolvasva.
 - A `$8000-$FFFF` tartományba a betöltés és a lejátszás idejére a kártya

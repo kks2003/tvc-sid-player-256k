@@ -5044,15 +5044,11 @@ op_4C:
             assert (op_4C & 255) == 76
 ; JMP abs
             ex de,hl
-            ld a,(hl)
-            inc hl
             ld e,(hl)
             inc hl
-            ex de,hl
+            ld l,(hl)
             ld h,RT>>8
-            ld h,(hl)
-            ld l,a
-            ex de,hl
+            ld d,(hl)
             ld a,(de)
             inc de
             ld l,a
