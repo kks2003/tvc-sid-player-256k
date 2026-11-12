@@ -102,6 +102,8 @@ static void typeText(const char *t)
     else if (*t == 'L') key(0x3D);
     else if (*t == 'R') key(0x3A);
     else if (*t == 'E') key(0x38);
+    else if (*t == 'F') key(0x74);      // 1. joystick tűz
+    else if (*t == 'G') key(0x7C);      // 2. joystick tűz
   }
 }
 static void writeWav(const char *fn, int rate)

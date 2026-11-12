@@ -19,8 +19,10 @@ A gépen: a `sidplay.cas` a kártya valamelyik meghajtójára, `LOAD "sidplay"`.
 Egy egyszerű fájlválasztó indul, amely az aktuális könyvtár alkönyvtárait
 és `.sid` fájljait mutatja:
 
-- **fel / le**: léptetés, **balra / jobbra**: lapozás,
-- **Enter**: a fájl lejátszása, illetve belépés a `[könyvtárba]` (`[..]`: vissza),
+- **fel / le**: léptetés, **balra / jobbra**: lapozás (a kurzornyilakkal vagy
+  bármelyik joystickkal),
+- **Enter** vagy **joystick tűz**: a fájl lejátszása, illetve belépés a
+  `[könyvtárba]` (`[..]`: vissza),
 - **D**: a következő meghajtó (USB pendrive, PSRAM, flash),
 - **ESC**: vissza a BASIC-be.
 

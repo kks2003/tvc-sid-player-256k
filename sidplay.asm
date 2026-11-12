@@ -14,8 +14,9 @@
 ; A $D000-$DFFF tartomány I/O: a $D400-$D7FF írása a SID-be megy, az olvasás
 ; egy árnyéklapról jön (OSC3/ENV3 képkockánként frissítve a kártyáról).
 ;
-; Fájlválasztó: fel/le (balra/jobbra: lapozás), Enter: lejátszás vagy belépés
-; a könyvtárba, D: másik meghajtó, ESC: vissza a BASIC-be.
+; Fájlválasztó: fel/le (balra/jobbra: lapozás), Enter vagy joystick tűz:
+; lejátszás vagy belépés a könyvtárba, D: másik meghajtó, ESC: vissza a BASIC-be.
+; A joystickok (1., 2.) iránya is léptet.
 ; ============================================================================
 
 P_PAGING    equ 02h
@@ -1672,22 +1673,37 @@ draw_all:   call cls
             jr .row
 
 ; A = a lenyomott billentyű (K_..., 0 = nincs)
+; a 8. sor a kurzornyilak és az 1. joystick, a 9. sor a 2. joystick:
+; 1. bit fel, 2. le, 6. balra, 5. jobbra, 3. tűz
 get_key:    ld c, 8
-            call read_row
+            call .joy
+            ret nz
+            ld c, 9
+            call .joy
+            ret nz
+            jr .keys
+.joy:       call read_row
             ld b, a
             ld a, K_UP
             bit 1, b
-            ret z
+            jr z, .hit
             inc a
             bit 2, b
-            ret z
+            jr z, .hit
             inc a
             bit 6, b
-            ret z
+            jr z, .hit
             inc a
             bit 5, b
-            ret z
-            ld c, 5
+            jr z, .hit
+            ld a, K_ENTER
+            bit 3, b                ; tűz: indítás
+            jr z, .hit
+            xor a
+            ret
+.hit:       or a                    ; Z = 0: van billentyű
+            ret
+.keys:      ld c, 5
             call read_row
             bit 4, a
             ld a, K_ENTER
@@ -2022,7 +2038,7 @@ s_info:     db "Betoltes: $", 0
 s_name:     db "Nev:    ", 0
 s_title:    db "SID lejatszo - TVC256k++  ", 0
 s_drives:   db "USB", 0, 0, 0, 0, 0, "PSRAM", 0, 0, 0, "FLASH", 0, 0, 0, "DSK", 0
-s_help:     db "Enter:indit D:meghajto ESC:ki", 0
+s_help:     db "Enter/tuz:indit D:megh. ESC:ki", 0
 s_noread:   db "Nem olvashato a meghajto!", 0
 s_anykey:   db 13, 10, "Nyomj meg egy gombot!", 0
 cur:        db 0
