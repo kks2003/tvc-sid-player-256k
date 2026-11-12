@@ -60,8 +60,8 @@ ami a zene után marad a 64 KB-ból, az a 6502 munkaterülete.
 
 ## Sebesség
 
-Egy 6502-es utasítás átlagosan kb. 95 Z80-ciklus (az emulátor szerint, a
-TVC memória-várakozásaival), így egy időzítő-IT alatt kb. 640 utasítás fér
+Egy 6502-es utasítás átlagosan kb. 94 Z80-ciklus (az emulátor szerint, a
+TVC memória-várakozásaival), így egy időzítő-IT alatt kb. 650 utasítás fér
 el. Ami ezt adja:
 
 - A kezelők címének alsó bájtja maga az opkód, a felső egy 256 bájtos
@@ -74,20 +74,24 @@ el. Ami ezt adja:
   a memóriában.
 - Az indexelt címzés ritka lapátlépésének javítása a kezelő végén van, a
   fő úton csak egy nem teljesülő `JR C`.
+- Elágazásnál az eltolás előjel-kiterjesztése 256 bájtos táblából jön, az
+  `ADD HL,DE` pedig a 6502 N/Z jelzőjét (S, Z) nem rontja: nem kell
+  elmenteni a jelzőket. A `JMP abs` a célt közvetlenül a DE-be tölti.
 - A zene lapjai a Z80 memóriájában is folytonosak, ezért a PC sima `INC DE`.
 - Lejátszás alatt saját, rövid IT-kezelő fut a ROM-é helyett (az hívásonként
   kb. 5000 ciklus), ez figyeli az időkorlátot is (végtelen ciklus ellen).
 - Ha egy hívás kicsúszik az időből, a következő rövidebbek behozzák.
 
-- A `STA $D4xx` (abszolút és indexelt) a lassú út helyett közvetlenül a
-  kártyára ír: a lejátszók hívásonként 20-30-szor írnak a SID-be.
+- A `STA $D4xx` (abszolút és indexelt) a lassú út elején közvetlenül a
+  kártyára ír (a lejátszók hívásonként 20-30-szor írnak a SID-be), a
+  memóriába menő tárolásoknak ez nem kerül semmibe.
 
 Emulátorban mérve (a SID-regiszterírások sorozata bájtra egyezik egy PC-s
 6502-emulátoréval): Commando (250-340 utasítás/hívás) és Golden Axe 1. dal
-(átlag 583, legfeljebb 668 utasítás/hívás) teljes tempóban megy. A Cybernoid
-II (Jeroen Tel) 1. dala 2 percig mérve: az első percben teljes tempó, utána,
-ahol hívásonként átlag 633-644 utasítás fut, 10 mp-es szakaszonként legfeljebb
-1,3%-kal lassabb. Ennél nehezebb lejátszórutinnál a zene jobban lelassul.
+(átlag 583, legfeljebb 668 utasítás/hívás) teljes tempóban megy, és a
+Cybernoid II (Jeroen Tel) 1. dala is, 2 percig mérve, a legnehezebb részén
+(hívásonként átlag 633-644, legfeljebb 837 utasítás) is. Ennél nehezebb
+lejátszórutinnál a zene lelassul.
 
 ## Tempó
 
@@ -121,7 +125,7 @@ különbséget nem követik, ez hallhatóan nem számít.
 
 - Csak PSID-szerű zenék; az RSID-k (CIA/VIC IT, kernal hívások) általában nem.
 - A digis (mintás, `$D418`-as) zenék és a 2SID/3SID nem.
-- Ha a lejátszórutin tartósan tovább fut egy időzítő-IT-nél (kb. 640
+- Ha a lejátszórutin tartósan tovább fut egy időzítő-IT-nél (kb. 650
   utasítás fölött), a zene lassul.
 
 ## Teszt
