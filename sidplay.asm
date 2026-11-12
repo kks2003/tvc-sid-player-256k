@@ -1053,9 +1053,7 @@ call_irq:   ld a, 8
             ld a, 04h               ; I = 1
             ld (fI), a
             jr emu_run
-getp_saved: ld a, (fC)
-            ld ixl, a
-            ld a, (rF)
+getp_saved: ld a, (rF)
             ld l, a
             push hl
             pop af
@@ -1078,11 +1076,10 @@ emu_run:    ld (emu_sp), sp
             ld a, (rA)
             ld b, a
             ld a, (rX)
-            ld c, a
+            ld ixl, a
             ld a, (rY)
             ld ixh, a
-            ld a, (fC)
-            ld ixl, a
+            ld c, OPHI >> 8         ; állandó a futás alatt (az elágazás táblája)
             ld a, (rF)
             ld l, a
             push hl
@@ -1103,11 +1100,9 @@ emu_save:   push af
             ld (rF), a
             ld a, h
             ld (emu_status), a
-            ld a, ixl
-            ld (fC), a
             ld a, b
             ld (rA), a
-            ld a, c
+            ld a, ixl
             ld (rX), a
             ld a, ixh
             ld (rY), a
@@ -1142,14 +1137,14 @@ wslow_A:    ld h, a                 ; gyors út: STA a SID-be ($D400-$D7FF)
             ld a, b
             jr wslow_v
 wslow_X:    push af
-            ld a, c
+            ld a, ixl
             jr wslow_v
 wslow_Y:    push af
             ld a, ixh
             jr wslow_v
 wslow_SAX:  push af
             ld a, b
-            and c
+            and ixl
 wslow_v:    ld h, a                 ; H = az írandó érték
             pop af
             push bc

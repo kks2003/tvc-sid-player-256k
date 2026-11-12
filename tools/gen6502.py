@@ -5,14 +5,15 @@
     python3 tools/gen6502.py --sym build/x.sym > cpu6502.asm   (2. menet: pakolva)
 
 A kezelők címének alsó bájtja maga az opkód, a felső bájt az OPHI táblában
-van, így az elágazás:  LD A,(DE) / INC DE / LD L,A / LD H,OPHI / LD H,(HL) / JP (HL).
+van, így az elágazás:  LD A,(DE) / INC DE / LD L,A / LD H,C / LD H,(HL) / JP (HL).
 Ehhez a kezelők méretét ismerni kell: az 1. menet sorban adja ki őket, a
 fordítás szimbólumfájljából (op_XX címkék) a 2. menet elpakolja őket.
 
 Regiszterek a futás alatt (lásd sidplay.asm):
-  B   = a 6502 A regisztere      C   = X      IXh = Y
-  F   = a 6502 N és Z jelzője élőben (S és Z); IXl = az átvitel (0. bit);
-        a többi jelző változóban: fV (2. bit), fD (08h), fI (04h)
+  B   = a 6502 A regisztere      IXl = X      IXh = Y
+  C   = OPHI >> 8 (állandó: az elágazás táblájának lapja)
+  F   = a 6502 N és Z jelzője élőben (S és Z); a többi jelző változóban:
+        fC (0. bit), fV (2. bit), fD (08h), fI (04h)
   DE  = a 6502 PC Z80-as címe (a zene lapjai a Z80 memóriájában is
         folytonosak, ezért INC DE-vel léptethető)
   HL, A: munkaregiszterek; AF': munkaterület ott, ahol a jelzők megmaradnak
@@ -22,16 +23,21 @@ lefoglalatlan lap: lassú út), INV (Z80-as lap -> 6502-es lap).
 """
 import sys
 
-NEXT = ["ld a,(de)", "inc de", "ld l,a", "ld h,OPHI>>8", "ld h,(hl)", "jp (hl)"]
+NEXT = ["ld a,(de)", "inc de", "ld l,a", "ld h,c", "ld h,(hl)", "jp (hl)"]
 # abszolút operandus: A = alsó bájt, L = felső bájt, DE = PC + 2 (jelzőket nem bánt)
 FA = ["ex de,hl", "ld a,(hl)", "inc hl", "ld e,(hl)", "inc hl", "ex de,hl"]
 EXA = ["ex af,af'"]
 RDT = ["ld h,RT>>8", "ld h,(hl)", "ld l,a", "ld a,(hl)"]
-STC = ["rla", "ld ixl,a"]          # a Z80 átvitele -> fC (S, Z megmarad)
+STC = ["rla", "ld (fC),a"]          # a Z80 átvitele -> fC (S, Z megmarad)
 _lab = [0]
 
+_tail = []
 def idx(reg):
-    return ["add a,%s" % reg, "jr nc,$+3", "inc l"]
+    """L:A += reg; a ritka lapátlépés javítása a kezelő végére kerül."""
+    _lab[0] += 1
+    f, b = ".c%d" % _lab[0], ".k%d" % _lab[0]
+    _tail.extend([f + ":", "inc l", "jr " + b])
+    return ["add a,%s" % reg, "jr c," + f, b + ":"]
 
 def read_value(mode):
     """Az operandus értéke A-ba (a jelzőket elronthatja)."""
@@ -40,16 +46,16 @@ def read_value(mode):
     if mode == "zp":
         return ["ld a,(de)", "inc de", "ld l,a", "ld h,ZPG>>8", "ld a,(hl)"]
     if mode in ("zpx", "zpy"):
-        return ["ld a,(de)", "inc de", "add a,%s" % ("c" if mode == "zpx" else "ixh"),
+        return ["ld a,(de)", "inc de", "add a,%s" % ("ixl" if mode == "zpx" else "ixh"),
                 "ld l,a", "ld h,ZPG>>8", "ld a,(hl)"]
     if mode == "abs":
         return FA + RDT
     if mode == "absx":
-        return FA + idx("c") + RDT
+        return FA + idx("ixl") + RDT
     if mode == "absy":
         return FA + idx("ixh") + RDT
     if mode == "indx":
-        return ["ld a,(de)", "inc de", "add a,c", "ld l,a", "ld h,ZPG>>8", "ld a,(hl)",
+        return ["ld a,(de)", "inc de", "add a,ixl", "ld l,a", "ld h,ZPG>>8", "ld a,(hl)",
                 "inc l", "ld l,(hl)"] + RDT
     if mode == "indy":
         return ["ld a,(de)", "inc de", "ld l,a", "ld h,ZPG>>8", "ld a,(hl)", "inc l",
@@ -62,16 +68,16 @@ def write_ptr(mode, var):
     if mode == "zp":
         return ["ld a,(de)", "inc de", "ld l,a", "ld h,ZPG>>8"], []
     if mode in ("zpx", "zpy"):
-        return EXA + ["ld a,(de)", "inc de", "add a,%s" % ("c" if mode == "zpx" else "ixh"),
+        return EXA + ["ld a,(de)", "inc de", "add a,%s" % ("ixl" if mode == "zpx" else "ixh"),
                       "ld l,a", "ld h,ZPG>>8"] + EXA, []
     if mode == "abs":
         a = FA
     elif mode == "absx":
-        a = FA + idx("c")
+        a = FA + idx("ixl")
     elif mode == "absy":
         a = FA + idx("ixh")
     elif mode == "indx":
-        a = ["ld a,(de)", "inc de", "add a,c", "ld l,a", "ld h,ZPG>>8", "ld a,(hl)",
+        a = ["ld a,(de)", "inc de", "add a,ixl", "ld l,a", "ld h,ZPG>>8", "ld a,(hl)",
              "inc l", "ld l,(hl)"]
     elif mode == "indy":
         a = ["ld a,(de)", "inc de", "ld l,a", "ld h,ZPG>>8", "ld a,(hl)", "inc l",
@@ -92,27 +98,27 @@ def write_ptr(mode, var):
 
 ALU = {   # A = érték; a végén F = N, Z
     "LDA": ["ld b,a", "or a"],
-    "LDX": ["ld c,a", "or a"],
+    "LDX": ["ld ixl,a", "or a"],
     "LDY": ["ld ixh,a", "or a"],
-    "LAX": ["ld b,a", "ld c,a", "or a"],
+    "LAX": ["ld b,a", "ld ixl,a", "or a"],
     "AND": ["and b", "ld b,a"],
     "ORA": ["or b", "ld b,a"],
     "EOR": ["xor b", "ld b,a"],
     "ADC": ["call do_adc"],
     "SBC": ["call do_sbc"],
     "CMP": ["ld l,a", "ld a,b", "sub l", "ccf"] + STC,
-    "CPX": ["ld l,a", "ld a,c", "sub l", "ccf"] + STC,
+    "CPX": ["ld l,a", "ld a,ixl", "sub l", "ccf"] + STC,
     "CPY": ["ld l,a", "ld a,ixh", "sub l", "ccf"] + STC,
     "BIT": ["call do_bit"],
-    "ANC": ["and b", "ld b,a", "push af", "rlca", "and 1", "ld ixl,a", "pop af"],
+    "ANC": ["and b", "ld b,a", "push af", "rlca", "and 1", "ld (fC),a", "pop af"],
     "ALR": ["and b", "srl a", "ld b,a"] + STC,
-    "SBX": ["ld l,a", "ld a,c", "and b", "sub l", "ld c,a", "ccf"] + STC,
+    "SBX": ["ld l,a", "ld a,ixl", "and b", "sub l", "ld ixl,a", "ccf"] + STC,
 }
 RMW = {   # (HL) = a módosítandó bájt
     "ASL": ["sla (hl)"] + STC,
     "LSR": ["srl (hl)"] + STC,
-    "ROL": ["ld a,ixl", "rra", "rl (hl)"] + STC,
-    "ROR": ["ld a,ixl", "rra", "rr (hl)"] + STC,
+    "ROL": ["ld a,(fC)", "rra", "rl (hl)"] + STC,
+    "ROR": ["ld a,(fC)", "rra", "rr (hl)"] + STC,
     "INC": ["inc (hl)"],
     "DEC": ["dec (hl)"],
 }
@@ -121,30 +127,30 @@ COMBO = {"SLO": ("ASL", "ORA"), "RLA": ("ROL", "AND"), "SRE": ("LSR", "EOR"),
 ACC = {
     "ASL": ["sla b"] + STC,
     "LSR": ["srl b"] + STC,
-    "ROL": ["ld a,ixl", "rra", "rl b"] + STC,
-    "ROR": ["ld a,ixl", "rra", "rr b"] + STC,
+    "ROL": ["ld a,(fC)", "rra", "rl b"] + STC,
+    "ROR": ["ld a,(fC)", "rra", "rr b"] + STC,
 }
-STORE = {"STA": ("A", ["ld (hl),b"]), "STX": ("X", ["ld (hl),c"]),
+STORE = {"STA": ("A", ["ld (hl),b"]), "STX": ("X", ["ld a,ixl", "ld (hl),a"]),
          "STY": ("Y", ["ld a,ixh", "ld (hl),a"]),
-         "SAX": ("SAX", ["push af", "ld a,b", "and c", "ld (hl),a", "pop af"])}
+         "SAX": ("SAX", ["push af", "ld a,b", "and ixl", "ld (hl),a", "pop af"])}
 SP = ["ld hl,(rS)"]                 # L = S, H = a verem lapja (rS után STKPG)
 IMP = {
     "NOP": [],
-    "CLC": ["ld a,0", "ld ixl,a"], "SEC": ["ld a,1", "ld ixl,a"],
+    "CLC": ["ld a,0", "ld (fC),a"], "SEC": ["ld a,1", "ld (fC),a"],
     "CLD": ["ld a,0", "ld (fD),a"], "SED": ["ld a,08h", "ld (fD),a"],
     "CLI": ["ld a,0", "ld (fI),a"], "SEI": ["ld a,04h", "ld (fI),a"],
     "CLV": ["ld a,0", "ld (fV),a"],
-    "TAX": ["ld c,b", "inc c", "dec c"], "TAY": ["ld a,b", "ld ixh,a", "or a"],
-    "TXA": ["ld b,c", "inc b", "dec b"], "TYA": ["ld a,ixh", "ld b,a", "or a"],
-    "TSX": ["ld a,(rS)", "ld c,a", "or a"], "TXS": ["ld a,c", "ld (rS),a"],
-    "INX": ["inc c"], "DEX": ["dec c"], "INY": ["inc ixh"], "DEY": ["dec ixh"],
+    "TAX": ["ld a,b", "ld ixl,a", "or a"], "TAY": ["ld a,b", "ld ixh,a", "or a"],
+    "TXA": ["ld a,ixl", "ld b,a", "or a"], "TYA": ["ld a,ixh", "ld b,a", "or a"],
+    "TSX": ["ld a,(rS)", "ld ixl,a", "or a"], "TXS": ["ld a,ixl", "ld (rS),a"],
+    "INX": ["inc ixl"], "DEX": ["dec ixl"], "INY": ["inc ixh"], "DEY": ["dec ixh"],
     "PHA": EXA + SP + ["ld (hl),b", "dec l", "ld a,l", "ld (rS),a"] + EXA,
     "PLA": SP + ["inc l", "ld a,l", "ld (rS),a", "ld a,(hl)", "ld b,a", "or a"],
     "PHP": ["push af", "call getp"] + SP + ["ld (hl),a", "dec l", "ld a,l", "ld (rS),a", "pop af"],
     "PLP": SP + ["inc l", "ld a,l", "ld (rS),a", "ld a,(hl)", "call setp"],
 }
 BRANCH = {"BPL": "p", "BMI": "m", "BEQ": "z", "BNE": "nz"}
-BRMEM = {"BCC": (["ld a,ixl", "rra"], "nc"), "BCS": (["ld a,ixl", "rra"], "c"),
+BRMEM = {"BCC": (["ld a,(fC)", "rra"], "nc"), "BCS": (["ld a,(fC)", "rra"], "c"),
          "BVC": (["ld a,(fV)", "and 4"], "z"), "BVS": (["ld a,(fV)", "and 4"], "nz")}
 
 OPS = {}
@@ -274,7 +280,7 @@ do_adc:     ld l,a
             ld a,(fD)
             or a
             jr nz,.dec
-            ld a,ixl
+            ld a,(fC)
             rra
             ld a,b
             adc a,l
@@ -282,10 +288,10 @@ do_adc:     ld l,a
             push af
             pop hl
             ld a,l
-            ld ixl,a
+            ld (fC),a
             ld (fV),a
             ret
-.dec:       ld a,ixl
+.dec:       ld a,(fC)
             rra
             ld a,b
             adc a,l
@@ -294,13 +300,13 @@ do_adc:     ld l,a
             push af
             pop hl
             ld a,l
-            ld ixl,a
+            ld (fC),a
             ret
 do_sbc:     ld l,a
             ld a,(fD)
             or a
             jr nz,.dec
-            ld a,ixl
+            ld a,(fC)
             cpl
             rra
             ld a,b
@@ -310,10 +316,10 @@ do_sbc:     ld l,a
             push af
             pop hl
             ld a,l
-            ld ixl,a
+            ld (fC),a
             ld (fV),a
             ret
-.dec:       ld a,ixl
+.dec:       ld a,(fC)
             cpl
             rra
             ld a,b
@@ -324,7 +330,7 @@ do_sbc:     ld l,a
             push af
             pop hl
             ld a,l
-            ld ixl,a
+            ld (fC),a
             ret
 ; BIT: A = M; Z = (A and M) = 0, N = M 7. bitje, V = M 6. bitje
 do_bit:     ld l,a
@@ -362,7 +368,7 @@ getp:       push af
             and 4
             jr z,.nv
             set 6,h
-.nv:        ld a,ixl
+.nv:        ld a,(fC)
             and 1
             or h
             ld h,a
@@ -389,7 +395,7 @@ setp:       ld l,a
             ld (fI),a
             ld a,l
             and 01h
-            ld ixl,a
+            ld (fC),a
             ld a,l
             and 80h
             ld h,a
@@ -426,7 +432,9 @@ def main():
     bodies = {}
     for code in range(256):
         _lab[0] = 0
+        del _tail[:]
         b = body(code) if code in OPS else ["jp emu_brk"]
+        b = b + list(_tail)
         bodies[code] = (["; %s %s" % OPS[code]] if code in OPS else ["; KIL / nem támogatott"]) + fmt(b)
     table = {}
     if sizes is None:               # 1. menet: sorban, csak a méretekhez
