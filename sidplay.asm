@@ -185,6 +185,7 @@ main:
             ld (card_slot6), a
             ld a, (V_PAGING)        ; az eredeti lapozás (a lejátszás után vissza)
             ld (saved_paging), a
+            call screen_on
             jp browser
 
 ; ---- egy beolvasott .sid lejátszása (sidbuf .. sidend) ----------------------
@@ -204,19 +205,6 @@ play_file:
             ld hl, 2
             ret
 .okfile:
-            ld hl, s_name
-            call prstr
-            ld hl, sidbuf + 16h
-            call prfield
-            ld hl, s_author
-            call prstr
-            ld hl, sidbuf + 36h
-            call prfield
-            ld hl, s_rel
-            call prstr
-            ld hl, sidbuf + 56h
-            call prfield
-
             ld ix, sidbuf
             ld h, (ix + 6)
             ld l, (ix + 7)
@@ -265,39 +253,17 @@ play_file:
 .songok:    ld (song), a
 .nosongreq:
 
-            ld hl, s_info
-            call prstr
-            ld hl, (load_addr)
-            call prhex
-            ld hl, s_dash
-            call prstr
-            ld hl, (load_addr)
-            ld de, (data_len)
-            add hl, de
-            dec hl
-            call prhex
-            ld hl, s_song
-            call prstr
-            ld a, (song)
-            ld l, a
-            ld h, 0
-            call prnum
-            ld hl, s_slash
-            call prstr
-            ld a, (songs)
-            ld l, a
-            ld h, 0
-            call prnum
-            call print_kind         ; PSID/RSID és az órajel
+            call draw_info          ; az adatlap (név, szerző, dal...)
             ld a, (sidbuf)          ; RSID: teljes C64-et vár, nem játsszuk le
             cp 'R'
             jr nz, .psid
+            ld bc, 0100h + SONG_ROW
+            call gotoxy
             ld hl, s_rsid_no
             call prstr
             ld hl, 6
             ret
-.psid:      ld hl, s_keys
-            call prstr
+.psid:
 
             ld a, (V_PORT05)
             ld (saved_p05), a
@@ -1467,7 +1433,7 @@ browser:    xor a
             call draw_mark
             jp .loop
 .quit:      call unmap_card
-            call cls
+            call screen_off         ; (törli is a képernyőt)
             ld hl, 0
             ret
 .drive:     ld a, REG_DRIVE         ; a következő meghajtó: USB, PSRAM, flash
@@ -1550,6 +1516,198 @@ nth_entry:  ld l, a
             ld de, sidbuf
             add hl, de
             ret
+
+; ---- az adatlap (32 oszlop, abszolút sorokban, hogy semmi ne törjön) -------
+SONG_ROW    equ 13
+INK_VAR     equ 0B4Dh           ; a ROM editor tinta- és papírszíne (palettaszám)
+PAPER_VAR   equ 0B4Eh
+
+draw_info:  call cls
+            ld hl, sidbuf + 16h     ; 1. sor: a név középen, inverz sávban
+            ld b, 32
+            call field_len
+            ld bc, 0101h
+            call gotoxy
+            ld hl, sidbuf + 16h
+            call bar32
+            ld bc, 0103h            ; Szerző
+            call gotoxy
+            ld hl, s_author
+            call prstr
+            ld bc, 0104h
+            call gotoxy
+            ld hl, sidbuf + 36h
+            call pr_field
+            ld bc, 0106h            ; Kiadva
+            call gotoxy
+            ld hl, s_rel
+            call prstr
+            ld bc, 0107h
+            call gotoxy
+            ld hl, sidbuf + 56h
+            call pr_field
+            ld bc, 0109h            ; Betöltés: $xxxx-$yyyy
+            call gotoxy
+            ld hl, s_info
+            call prstr
+            ld hl, (load_addr)
+            call prhex
+            ld hl, s_dash
+            call prstr
+            ld hl, (load_addr)
+            ld de, (data_len)
+            add hl, de
+            dec hl
+            call prhex
+            ld bc, 010Ah            ; Típus: PSID, PAL
+            call gotoxy
+            call print_kind
+            ld a, (sidbuf)          ; RSID-nél nincs dal-sáv és súgó
+            cp 'R'
+            ret z
+            ld de, entbuf           ; a dal-sáv: "Dal: 1 / 23" középen
+            ld hl, s_song
+            call copy_str
+            ld a, (song)
+            call put_dec
+            ld hl, s_of
+            call copy_str
+            ld a, (songs)
+            call put_dec
+            xor a
+            ld (de), a
+            ld hl, entbuf
+            ld b, 32
+            call field_len
+            ld bc, 0100h + SONG_ROW
+            call gotoxy
+            ld hl, entbuf
+            call bar32
+            ld bc, 0116h            ; súgó a 22-23. sorban
+            call gotoxy
+            ld hl, s_keys
+            jp prstr
+
+; A = a HL-en kezdődő név hossza (0-ig, legfeljebb B)
+field_len:  ld c, 0
+.l:         ld a, (hl)
+            or a
+            jr z, .e
+            inc hl
+            inc c
+            djnz .l
+.e:         ld a, c
+            ret
+
+; A hosszú szöveg (HL) középre igazítva, inverz, 32 oszlopos sávban
+bar32:      push hl
+            ld b, a
+            ld a, 32
+            sub b
+            srl a                   ; bal oldali szóközök
+            ld b, a
+            call inverse
+            pop hl
+            ld e, 0                 ; E = kiírt karakterek
+.p:         ld a, b
+            or a
+            jr z, .s
+            ld c, ' '
+            call putc
+            inc e
+            dec b
+            jr .p
+.s:         ld a, e
+            cp 32
+            jr nc, .f
+            ld a, (hl)
+            or a
+            jr z, .f
+            call printable
+            ld c, a
+            call putc
+            inc hl
+            inc e
+            jr .s
+.f:         ld a, e                 ; jobb oldal: szóközök a sáv végéig
+            cp 32
+            jr nc, .d
+            ld c, ' '
+            call putc
+            inc e
+            jr .f
+.d:         jp inverse              ; vissza normálba
+
+; PSID szövegmező (HL, legfeljebb 32 karakter, 0-ig) kiírása
+pr_field:   ld b, 32
+.l:         ld a, (hl)
+            or a
+            ret z
+            call printable
+            ld c, a
+            call putc
+            inc hl
+            djnz .l
+            ret
+
+; A -> kiírható karakter (a vezérlőkódok és a 7Fh fölöttiek helyett '?')
+printable:  cp 20h
+            jr c, .q
+            cp 7Fh
+            ret c
+.q:         ld a, '?'
+            ret
+
+; C karakter kiírása (megőrzi: BC, DE, HL)
+putc:       push hl
+            push de
+            push bc
+            rst 30h
+            db 21h
+            pop bc
+            pop de
+            pop hl
+            ret
+
+; tinta és papír cseréje (inverz be / ki)
+inverse:    push hl
+            ld hl, (INK_VAR)        ; L = tinta, H = papír
+            ld a, l
+            ld l, h
+            ld h, a
+            ld (INK_VAR), hl
+            pop hl
+            ret
+
+; HL szöveg (0-ig) másolása DE-re (DE a végére mutat)
+copy_str:   ld a, (hl)
+            or a
+            ret z
+            ld (de), a
+            inc hl
+            inc de
+            jr copy_str
+
+; A (1..255) tízes számrendszerben a DE-re (DE a végére mutat)
+put_dec:    push de
+            ld l, a
+            ld h, 0
+            ld de, numbuf + 5
+            xor a
+            ld (de), a
+.l:         dec de
+            push de
+            ld c, 10
+            call div16
+            pop de
+            add a, '0'
+            ld (de), a
+            ld a, h
+            or l
+            jr nz, .l
+            ex de, hl
+            pop de
+            jp copy_str
 
 ; a fejléc típusa (PSID/RSID) és órajele (PAL, NTSC, mindkettő, ismeretlen)
 print_kind: ld hl, s_kind
@@ -1692,6 +1850,8 @@ draw_all:   call cls
 .b:         push hl
             rst 30h
             db 21h
+            ld a, (draw_dir)
+            call set_ink
             pop hl
             ld b, NAME_COLS
 .ch:        ld a, (hl)
@@ -1724,6 +1884,9 @@ draw_all:   call cls
             ld b, KIND_COL
             call gotoxy
             pop af
+            push af
+            call set_ink            ; RSID: sötétzöld
+            pop af
             ld hl, s_psid
             or a
             jr z, .pk
@@ -1732,11 +1895,65 @@ draw_all:   call cls
             jr z, .pk
             ld hl, s_qsid
 .pk:        call prstr
+            ld a, (norm_ink)        ; vissza a normál tintára
+            ld (INK_VAR), a
 .nx:        ld hl, draw_i
             inc (hl)
             ld hl, draw_row
             inc (hl)
             jp .row
+
+; a listaelem típusa szerinti tinta: RSID (2) -> sötétzöld (3. paletta)
+set_ink:    cp 2
+            ld a, (norm_ink)
+            jr nz, .s
+            ld a, 3
+.s:         ld (INK_VAR), a
+            ret
+
+; A képernyő a program alatt, függetlenül attól, hogyan indult: 4 színű mód
+; (32 oszlop), paletta: 0 fekete, 1 zöld, 2 vörös, 3 sötétzöld; tinta 1,
+; papír 0, fekete keret. Kilépéskor az eredeti mód (a ROM VID-MODE a palettát
+; is a saját alapértékére állítja), tinta, papír és keret vissza.
+V_MODE      equ 0B73h           ; a video üzemmód (0: 2, 1: 4, 2: 16 színű)
+V_BORDER    equ 0B4Fh
+P_BORDER    equ 00h
+PALETTE     db 00h, 50h, 44h, 10h   ; I G R B a 6., 4., 2., 0. biten
+screen_on:  ld a, (V_MODE)
+            ld (orig_mode), a
+            ld hl, (INK_VAR)        ; tinta, papír
+            ld (orig_ink), hl
+            ld a, (V_BORDER)
+            ld (orig_border), a
+            ld c, 1                 ; VIDEO VID-MODE: 4 színű mód (törli is)
+            rst 30h
+            db 04h
+            ld hl, PALETTE
+            ld c, 60h
+            ld b, 4
+.p:         ld a, (hl)
+            out (c), a
+            inc hl
+            inc c
+            djnz .p
+            ld hl, 0001h            ; tinta 1, papír 0
+            ld (INK_VAR), hl
+            ld a, 1
+            ld (norm_ink), a
+            xor a
+            ld (V_BORDER), a
+            out (P_BORDER), a
+            ret
+screen_off: ld a, (orig_mode)
+            ld c, a
+            rst 30h
+            db 04h
+            ld hl, (orig_ink)
+            ld (INK_VAR), hl
+            ld a, (orig_border)
+            ld (V_BORDER), a
+            out (P_BORDER), a
+            ret
 
 ; A = a lenyomott billentyű (K_..., 0 = nincs)
 ; a 8. sor a kurzornyilak és az 1. joystick, a 9. sor a 2. joystick:
@@ -2184,6 +2401,10 @@ key_rep:    db 0
 draw_i:     db 0
 draw_row:   db 0
 draw_dir:   db 0
+norm_ink:   db 1
+orig_mode:  db 1
+orig_ink:   dw 0001h
+orig_border: db 0
 s_sep:      db "  ", 0
 s_dot:      db 2, "./"
 s_ext:      db ".sid", 0

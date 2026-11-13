@@ -19,12 +19,12 @@ STRINGS = [   # (címke, szöveg); a "\r\n" sorvége 13, 10
     ("s_badfile", "Nem PSID/RSID fájl!" + CR),
     ("s_nomem", "Nincs elég memória!" + CR),
     ("s_noplay", "Nincs lejátszócím!" + CR),
-    ("s_name", "Név:    "),
-    ("s_author", "Szerző: "),
-    ("s_rel", "Kiadva: "),
+    ("s_author", "Szerző:"),
+    ("s_rel", "Kiadva:"),
     ("s_info", "Betöltés: $"),
-    ("s_song", "  dal: "),
-    ("s_kind", CR + "Típus:  "),
+    ("s_song", "Dal: "),
+    ("s_of", " / "),
+    ("s_kind", "Típus:    "),
     ("s_clk0", "ismeretlen (PAL)"),
     ("s_title", "SID-lejátszó - TVC256k++  "),
     ("s_help", "Enter/tűz:indít D:megh. ESC:ki"),
@@ -33,11 +33,11 @@ STRINGS = [   # (címke, szöveg); a "\r\n" sorvége 13, 10
     ("s_notfound", "Nincs ilyen fájl!" + CR),
     ("s_toolarge", "Túl nagy fájl!" + CR),
     ("s_readerr", "Olvasási hiba!" + CR),
-    ("s_rsid_no", CR + CR + "RSID-zene: teljes C64-et vár" + CR +
+    ("s_rsid_no", "RSID-zene: teljes C64-et vár" + CR +
                   "(megszakítások, digi), ezt nem" + CR +
                   "tudom lejátszani." + CR),
-    ("s_keys", CR + CR + "1-9,0: dal  <- ->: előző/köv." + CR +
-               "ESC/SPACE: vissza a listához" + CR),
+    ("s_keys", "1-9,0: dal  <- ->: előző/köv." + CR +
+               "ESC/SPACE: vissza a listához"),
 ]
 
 
