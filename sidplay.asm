@@ -253,7 +253,13 @@ play_file:
 .songok:    ld (song), a
 .nosongreq:
 
-            call draw_info          ; az adatlap (név, szerző, dal...)
+            ld a, (switching)       ; dalváltás: csak a dal-sáv és az idő
+            or a
+            jr z, .full
+            call draw_song
+            jr .drawn
+.full:      call draw_info          ; az adatlap (név, szerző, dal...)
+.drawn:
             call sid_count          ; 2-3 SID: a kártyán csak egy van
             cp 2
             jr c, .one
@@ -443,19 +449,13 @@ play_file:
 .nt:        ld a, (cia_dirty)       ; a zene átírta a CIA időzítőt
             or a
             call nz, timer_update
-            ld hl, key_cnt          ; ESC/SPACE minden 4., a dalválasztók minden
-            dec (hl)                ; 8. hívásnál (a billentyűolvasás is idő)
-            ld a, (hl)
-            and 3
+            ld hl, key_cnt          ; a billentyűk minden 2. hívásnál (40 ms: egy
+            dec (hl)                ; rövid gombnyomás se maradjon ki)
             jp nz, .frame
+            ld (hl), 2
             call read_keys
             cp KEYMASK
             jr nz, .esc
-            ld hl, key_cnt
-            ld a, (hl)
-            or a
-            jp nz, .frame
-            ld (hl), 8
             call read_song_key      ; számbillentyű / nyilak: másik dal
             or a
             jp z, .frame
@@ -1539,14 +1539,21 @@ browser:    xor a
 .file:      call set_name
             xor a
             ld (song_req), a
-.load:      call cls
+            ld (switching), a
+.load:      ld a, (switching)       ; dalváltáskor a kép marad
+            or a
+            call z, cls
             call load_file
             jr c, .err
             call play_file
             ld a, l
             cp 5                    ; dalváltás: újra beolvassuk a fájlt
+            ld a, 1
+            ld (switching), a
             jr z, .load
-            or a
+            xor a
+            ld (switching), a
+            or l
             jp z, .rescan
 .err:       ld hl, s_anykey         ; hiba: az üzenet a képernyőn marad
             call prstr
@@ -1716,8 +1723,19 @@ draw_info:  ld hl, PAL_PLAY
             call sid_count
             cp 2
             jr nc, .done
-            ; 13. sor: a dal, sárga sávban feketével: "DAL  3 / 23"
-            ld de, entbuf
+            call draw_song
+            ; 22-23. sor: súgó
+            ld hl, C_BLACK * 256 + C_GREEN
+            call colors
+            ld bc, 0116h
+            call at
+            ld hl, s_keys
+            call prstr
+.done:      ld hl, C_BLACK * 256 + C_GREEN
+            jp colors
+
+; a dal-sáv (13. sor) és az idő (16. sor, nullázva)
+draw_song:  ld de, entbuf           ; "DAL  3 / 23" sárga sávban feketével
             ld hl, s_song
             call copy_str
             ld a, (song)
@@ -1738,16 +1756,7 @@ draw_info:  ld hl, PAL_PLAY
             xor a
             ld (secs), a
             ld (mins), a
-            call show_time
-            ; 22-23. sor: súgó
-            ld hl, C_BLACK * 256 + C_GREEN
-            call colors
-            ld bc, 0116h
-            call at
-            ld hl, s_keys
-            call prstr
-.done:      ld hl, C_BLACK * 256 + C_GREEN
-            jp colors
+            jp show_time
 label:      ld hl, C_BLACK * 256 + C_GREEN
             jp colors
 value:      ld hl, C_BLACK * 256 + C_YELLOW
@@ -2633,6 +2642,7 @@ draw_i:     db 0
 draw_row:   db 0
 draw_dir:   db 0
 norm_ink:   db 1
+switching:  db 0
 cps:        dw 50
 cps_cnt:    dw 50
 secs:       db 0
