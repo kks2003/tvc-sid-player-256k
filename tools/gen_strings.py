@@ -40,6 +40,9 @@ STRINGS = [   # (címke, szöveg); a "\r\n" sorvége 13, 10
     ("s_rsid_no", "RSID-zene: teljes C64-et vár" + CR +
                   "(megszakítások, digi), ezt nem" + CR +
                   "tudom lejátszani." + CR),
+    ("s_multi1", "Ez a zene "),
+    ("s_multi2", " SID-es, a kártyán" + CR + "csak egy SID van: ezt nem" + CR +
+                 "tudom lejátszani." + CR),
     ("s_keys", "1-9,0: dal  <- ->: előző/köv." + CR +
                "ESC/SPACE: vissza a listához"),
 ]

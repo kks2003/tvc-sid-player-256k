@@ -254,7 +254,24 @@ play_file:
 .nosongreq:
 
             call draw_info          ; az adatlap (név, szerző, dal...)
-            ld a, (sidbuf)          ; RSID: teljes C64-et vár, nem játsszuk le
+            call sid_count          ; 2-3 SID: a kártyán csak egy van
+            cp 2
+            jr c, .one
+            push af
+            ld bc, 0100h + SONG_ROW
+            call gotoxy
+            ld hl, C_BLACK * 256 + C_YELLOW
+            call colors
+            ld hl, s_multi1
+            call prstr
+            pop af
+            add a, '0'
+            ld c, a
+            call putc
+            ld hl, s_multi2
+            call prstr
+            jr .nogo
+.one:       ld a, (sidbuf)          ; RSID: teljes C64-et vár, nem játsszuk le
             cp 'R'
             jr nz, .psid
             ld bc, 0100h + SONG_ROW
@@ -263,6 +280,7 @@ play_file:
             call colors
             ld hl, s_rsid_no
             call prstr
+.nogo:
             ld hl, C_BLACK * 256 + C_GREEN
             call colors
             ld hl, 6
@@ -1655,7 +1673,19 @@ draw_info:  ld hl, PAL_PLAY
             ld (de), a
             ld hl, entbuf
             call prstr
-            ld bc, 030Ah
+            call sid_count          ; több SID: ", 2 SID"
+            cp 2
+            jr c, .t1
+            push af
+            ld hl, s_comma
+            call prstr
+            pop af
+            add a, '0'
+            ld c, a
+            call putc
+            ld hl, s_sid
+            call prstr
+.t1:        ld bc, 030Ah
             call at
             call label
             ld hl, s_clock
@@ -1680,9 +1710,12 @@ draw_info:  ld hl, PAL_PLAY
             add hl, de
             dec hl
             call prhex
-            ld a, (sidbuf)          ; RSID: nincs dal-sáv, idő és súgó
+            ld a, (sidbuf)          ; RSID vagy több SID: nincs dal-sáv, idő, súgó
             cp 'R'
             jr z, .done
+            call sid_count
+            cp 2
+            jr nc, .done
             ; 13. sor: a dal, sárga sávban feketével: "DAL  3 / 23"
             ld de, entbuf
             ld hl, s_song
@@ -1749,6 +1782,34 @@ pr2:        ld b, '0' - 1
             pop af
             ld c, a
             jp putc
+
+; A = a zene SID-jeinek száma (1-3): PSID v3+ $7A, v4+ $7B: a 2. és a 3.
+; SID címének középső bájtja (0: nincs)
+sid_count:  ld a, (sidbuf + 7)      ; az adatok eltolása: elég hosszú-e a fejléc
+            cp 7Ch
+            ld a, 1
+            ret c
+            ld a, (sidbuf + 5)
+            cp 3
+            ld a, 1
+            ret c
+            ld a, (sidbuf + 7Ah)
+            or a
+            ld a, 1
+            jr z, .v4
+            inc a
+.v4:        push af
+            ld a, (sidbuf + 5)
+            cp 4
+            jr c, .e
+            ld a, (sidbuf + 7Bh)
+            or a
+            jr z, .e
+            pop af
+            inc a
+            ret
+.e:         pop af
+            ret
 
 ; HL = az órajel neve a fejléc szerint
 clock_name: xor a                   ; v2+ fejléc: a $77. bájt 2-3. bitje
@@ -2607,6 +2668,7 @@ namebuf:    ds 48
 entbuf:     ds ENT_SIZE + 1
 s_dash:     db "-$", 0
 s_slash:    db "/", 0
+s_sid:      db " SID", 0
 s_psid:     db "PSID", 0
 s_rsid:     db "RSID", 0
 s_qsid:     db "????", 0

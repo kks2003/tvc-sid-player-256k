@@ -39,7 +39,8 @@ dal sorszáma kiemelt sávban, és az eltelt idő (másodpercenként frissül). 
 lista és az adatlap saját palettát használ, induláskor 4 színű módba vált,
 kilépéskor az eredeti mód és színek visszaállnak. RSID zenét nem indít el: ezek teljes C64-et
 várnak (megszakítások, digi), ezt kiírja, és egy gombnyomásra vissza a
-listához. A szövegek magyarul, ékezetes betűkkel jelennek meg
+listához. Ugyanígy a 2 és 3 SID-es zenéket (PSID v3/v4 fejléc) sem: a
+kártyán csak egy SID van. A szövegek magyarul, ékezetes betűkkel jelennek meg
 (`tools/gen_strings.py` készíti a TVC-kódolású `strings.inc`-et).
 
 Kell: Python 3, [sjasmplus](https://github.com/z00m128/sjasmplus). A gépen:
@@ -136,7 +137,8 @@ különbséget nem követik, ez hallhatóan nem számít.
 ## Korlátok
 
 - Csak PSID-szerű zenék; az RSID-k (CIA/VIC IT, kernal hívások) általában nem.
-- A digis (mintás, `$D418`-as) zenék és a 2SID/3SID nem.
+- A digis (mintás, `$D418`-as) zenék és a 2 és 3 SID-es zenék nem (ezeknél
+  a lejátszó kiírja az okát).
 - Ha a lejátszórutin tartósan tovább fut egy időzítő-IT-nél (kb. 650
   utasítás fölött), a zene lassul.
 
