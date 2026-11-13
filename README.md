@@ -17,7 +17,8 @@ könyvtárban). Saját fordítás:
 
 A gépen: a `sidplay.cas` a kártya valamelyik meghajtójára, `LOAD "sidplay"`.
 Egy egyszerű fájlválasztó indul, amely az aktuális könyvtár alkönyvtárait
-és `.sid` fájljait mutatja:
+és `.sid` fájljait mutatja, a fájlok mellett a típusukkal (`PSID`, `RSID`;
+ezt a fájl első 4 bájtjából olvassa):
 
 - **fel / le**: léptetés, **balra / jobbra**: lapozás (a kurzornyilakkal vagy
   bármelyik joystickkal),
@@ -31,6 +32,12 @@ Lejátszás közben:
 - **1-9**, **0**: az 1-9., illetve a 10. dal,
 - **jobbra / balra nyíl**: a következő / előző dal,
 - **ESC** vagy **SPACE**: vissza a fájlválasztóhoz.
+
+A zene indulásakor kiírja a típusát és az órajelét is (PAL, NTSC,
+PAL/NTSC vagy ismeretlen). RSID zenét nem indít el: ezek teljes C64-et
+várnak (megszakítások, digi), ezt kiírja, és egy gombnyomásra vissza a
+listához. A szövegek magyarul, ékezetes betűkkel jelennek meg
+(`tools/gen_strings.py` készíti a TVC-kódolású `strings.inc`-et).
 
 Kell: Python 3, [sjasmplus](https://github.com/z00m128/sjasmplus). A gépen:
 TVC 64k és TVC256k++ kártya (az 1., 2., 3. vagy 0. slotban, a lejátszó

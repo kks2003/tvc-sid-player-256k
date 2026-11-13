@@ -288,7 +288,15 @@ play_file:
             ld l, a
             ld h, 0
             call prnum
-            ld hl, s_keys
+            call print_kind         ; PSID/RSID és az órajel
+            ld a, (sidbuf)          ; RSID: teljes C64-et vár, nem játsszuk le
+            cp 'R'
+            jr nz, .psid
+            ld hl, s_rsid_no
+            call prstr
+            ld hl, 6
+            ret
+.psid:      ld hl, s_keys
             call prstr
 
             ld a, (V_PORT05)
@@ -1361,7 +1369,8 @@ ENT_SIZE    equ 48
 ENT_MAX     equ 250
 LIST_ROW    equ 3               ; a lista első sora a képernyőn
 LIST_ROWS   equ 20
-NAME_COLS   equ 28
+NAME_COLS   equ 23              ; a név a 3-25. oszlopban
+KIND_COL    equ 28              ; "PSID" / "RSID" a 28-31. oszlopban
 K_UP        equ 1
 K_DOWN      equ 2
 K_LEFT      equ 3
@@ -1474,8 +1483,8 @@ browser:    xor a
 .enter:     call cur_entry          ; HL = az elem
             ld a, (hl)
             inc hl
-            or a
-            jr z, .file
+            cp 1                    ; 1: könyvtár, a többi fájl (0 PSID, 2 RSID, 3 ?)
+            jr nz, .file
             call set_name           ; könyvtár: belépünk
             call io_on
             ld hl, name_len
@@ -1541,6 +1550,48 @@ nth_entry:  ld l, a
             ld de, sidbuf
             add hl, de
             ret
+
+; a fejléc típusa (PSID/RSID) és órajele (PAL, NTSC, mindkettő, ismeretlen)
+print_kind: ld hl, s_kind
+            call prstr
+            ld b, 4
+            ld hl, sidbuf
+.t:         ld c, (hl)
+            push hl
+            push bc
+            rst 30h
+            db 21h
+            pop bc
+            pop hl
+            inc hl
+            djnz .t
+            ld hl, s_comma
+            call prstr
+            xor a                   ; v2+ fejléc: a $77. bájt 2-3. bitje
+            ld b, a
+            ld a, (sidbuf + 5)
+            cp 2
+            jr c, .k
+            ld a, (sidbuf + 7)
+            cp 7Ch
+            jr c, .k
+            ld a, (sidbuf + 77h)
+            rrca
+            rrca
+            and 3
+            ld b, a
+.k:         ld a, b
+            add a, a
+            ld e, a
+            ld d, 0
+            ld hl, clock_names
+            add hl, de
+            ld a, (hl)
+            inc hl
+            ld h, (hl)
+            ld l, a
+            jp prstr
+clock_names: dw s_clk0, s_clk1, s_clk2, s_clk3
 
 ; A = a kurzor lapjának első eleme
 calc_top:   ld a, (cur)
@@ -1634,9 +1685,9 @@ draw_all:   call cls
             ld a, (hl)
             inc hl
             ld (draw_dir), a
-            or a
+            cp 1                    ; 1: könyvtár
             ld c, ' '
-            jr z, .b
+            jr nz, .b
             ld c, '['
 .b:         push hl
             rst 30h
@@ -1661,16 +1712,31 @@ draw_all:   call cls
             inc hl
             djnz .ch
 .end:       ld a, (draw_dir)
-            or a
-            jr z, .nx
+            cp 1
+            jr nz, .kind
             ld c, ']'
             rst 30h
             db 21h
+            jr .nx
+.kind:      push af                 ; fájl: a típus a sor végére
+            ld a, (draw_row)
+            ld c, a
+            ld b, KIND_COL
+            call gotoxy
+            pop af
+            ld hl, s_psid
+            or a
+            jr z, .pk
+            ld hl, s_rsid
+            cp 2
+            jr z, .pk
+            ld hl, s_qsid
+.pk:        call prstr
 .nx:        ld hl, draw_i
             inc (hl)
             ld hl, draw_row
             inc (hl)
-            jr .row
+            jp .row
 
 ; A = a lenyomott billentyű (K_..., 0 = nincs)
 ; a 8. sor a kurzornyilak és az 1. joystick, a 9. sor a 2. joystick:
@@ -1830,7 +1896,7 @@ scan_dir:   xor a
 .f:         ld hl, entbuf + 1
             call is_sid
             jr nz, .next
-            xor a
+            call sid_kind           ; A = 0 PSID, 2 RSID, 3 egyéb
 .add:       ld (entbuf), a
             ld a, (ent_count)
             call nth_entry
@@ -1845,6 +1911,85 @@ scan_dir:   xor a
 .close:     ld hl, dirh
             call put_handle
             ld a, 06h               ; MSC_CLOSEDIR
+            jp card_cmd
+
+; az entbuf nevű fájl első 4 bájtja: A = 0 "PSID", 2 "RSID", 3 egyéb vagy hiba
+sid_kind:   ld hl, entbuf + 1
+            call set_name
+            call file_open
+            ld a, 3
+            ret nz
+            ld hl, fileh
+            call put_handle
+            call io_on
+            ld hl, 4
+            ld (IO_PARAM + 4), hl
+            call io_off
+            ld a, 03h               ; MSC_FREAD
+            call card_cmd
+            ld b, 3
+            jr nz, .cl
+            call io_on
+            ld hl, (IO_RESULT)      ; 4 bájt jött?
+            ld de, -4
+            add hl, de
+            ld a, h
+            or l
+            jr nz, .x
+            ld hl, (IO_RESULT + 3)  ; "SI", "D"
+            ld de, -('I' * 256 + 'S')
+            add hl, de
+            ld a, h
+            or l
+            jr nz, .x
+            ld a, (IO_RESULT + 5)
+            cp 'D'
+            jr nz, .x
+            ld a, (IO_RESULT + 2)
+            ld b, 0
+            cp 'P'
+            jr z, .x
+            ld b, 2
+            cp 'R'
+            jr z, .x
+            ld b, 3
+.x:         call io_off
+.cl:        push bc
+            call file_close
+            pop bc
+            ld a, b
+            ret
+
+; a namebuf nevű fájl megnyitása olvasásra (fileh); Z = 1: sikerült
+file_open:  call io_on
+            ld hl, IO_PARAM
+            ld (hl), 01h            ; FA_READ
+            inc hl
+            ld (hl), 0
+            inc hl
+            ld a, (name_len)
+            ld (hl), a
+            inc hl
+            ex de, hl
+            ld hl, namebuf
+            ld c, a
+            ld b, 0
+            ldir
+            call io_off
+            ld a, 01h               ; MSC_FOPENFILE
+            call card_cmd
+            ret nz
+            call io_on
+            ld hl, IO_RESULT
+            ld de, fileh
+            ld bc, 4
+            ldir
+            call io_off
+            xor a
+            ret
+file_close: ld hl, fileh
+            call put_handle
+            ld a, 02h               ; MSC_FCLOSEFILE
             jp card_cmd
 
 ; Z = 1, ha a HL-en kezdődő (0-végű) név ".sid"-re végződik (kisbetű/nagybetű)
@@ -2028,19 +2173,8 @@ load_file:  call map_card
 ; ---- adatok ----------------------------------------------------------------
 slot_order: db 20h, 30h, 40h, 10h, 0FFh     ; a kártya portjai: 1., 2., 3., 0. slot
 s_crlf:     db 13, 10, 0
-s_nocard:   db "Nincs TVC256k++ kartya!", 13, 10, 0
-s_badfile:  db "Nem PSID/RSID fajl!", 13, 10, 0
-s_nomem:    db "Nincs eleg memoria!", 13, 10, 0
-s_noplay:   db "Nincs lejatszo cim!", 13, 10, 0
-s_author:   db "Szerzo: ", 0
-s_rel:      db "Kiadva: ", 0
-s_info:     db "Betoltes: $", 0
-s_name:     db "Nev:    ", 0
-s_title:    db "SID lejatszo - TVC256k++  ", 0
+            include "strings.inc"   ; a magyar szövegek (tools/gen_strings.py)
 s_drives:   db "USB", 0, 0, 0, 0, 0, "PSRAM", 0, 0, 0, "FLASH", 0, 0, 0, "DSK", 0
-s_help:     db "Enter/tuz:indit D:megh. ESC:ki", 0
-s_noread:   db "Nem olvashato a meghajto!", 0
-s_anykey:   db 13, 10, "Nyomj meg egy gombot!", 0
 cur:        db 0
 top:        db 0
 ent_count:  db 0
@@ -2050,9 +2184,6 @@ key_rep:    db 0
 draw_i:     db 0
 draw_row:   db 0
 draw_dir:   db 0
-s_notfound: db "Nincs ilyen fajl!", 13, 10, 0
-s_toolarge: db "Tul nagy fajl!", 13, 10, 0
-s_readerr:  db "Olvasasi hiba!", 13, 10, 0
 s_sep:      db "  ", 0
 s_dot:      db 2, "./"
 s_ext:      db ".sid", 0
@@ -2080,10 +2211,14 @@ name_len:   db 0
 namebuf:    ds 48
 entbuf:     ds ENT_SIZE + 1
 s_dash:     db "-$", 0
-s_song:     db "  dal: ", 0
 s_slash:    db "/", 0
-s_keys:     db 13, 10, 13, 10, "1-9,0: dal  <- ->: elozo/kov.", 13, 10
-            db "ESC/SPACE: vissza a listahoz", 13, 10, 0
+s_psid:     db "PSID", 0
+s_rsid:     db "RSID", 0
+s_qsid:     db "????", 0
+s_comma:    db ", ", 0
+s_clk1:     db "PAL", 0
+s_clk2:     db "NTSC", 0
+s_clk3:     db "PAL/NTSC", 0
 
 saved_sp:   dw 0
 saved_paging: db 0

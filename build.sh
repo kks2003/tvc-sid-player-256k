@@ -7,7 +7,8 @@ set -e
 cd "$(dirname "$0")"
 command -v sjasmplus >/dev/null || { echo "hiányzik a sjasmplus (https://github.com/z00m128/sjasmplus)" >&2; exit 1; }
 mkdir -p build
-printf '%-32s' 'TVC SID lejatszo' > build/title.bin
+python3 tools/gen_strings.py --title 'TVC SID-lejátszó' build/title.bin
+python3 tools/gen_strings.py > strings.inc
 # A 6502-emulátor két menetben: az 1. menet méri a kezelők méretét, a 2. úgy
 # pakolja el őket, hogy a címük alsó bájtja az opkód legyen.
 python3 tools/gen6502.py > cpu6502.asm
