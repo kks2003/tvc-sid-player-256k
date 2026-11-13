@@ -1532,11 +1532,13 @@ browser:    xor a
             jp z, .rescan
 .err:       ld hl, s_anykey         ; hiba: az üzenet a képernyőn marad
             call prstr
-            call wait_release
-.wk:        halt
-            call get_key
-            or a
+.wr:        halt                    ; előbb minden gomb fel (pl. az Enter)
+            call any_key
+            jr nz, .wr
+.wk:        halt                    ; aztán bármelyik gomb (vagy joystick)
+            call any_key
             jr z, .wk
+            call wait_release
             jp .rescan
 
 ; a HL-en kezdődő (0-végű) név -> namebuf, name_len
@@ -2156,6 +2158,19 @@ get_key:    ld c, 8
             bit 1, a
             ld a, K_DRIVE
             ret z
+            xor a
+            ret
+; Z = 0, ha a billentyűzet (vagy joystick) bármelyik gombja le van nyomva
+any_key:    ld c, 0
+.r:         push bc
+            call read_row
+            pop bc
+            inc a                   ; FFh: nincs lenyomva
+            ret nz
+            inc c
+            ld a, c
+            cp 10
+            jr c, .r
             xor a
             ret
 wait_release:
