@@ -259,8 +259,12 @@ play_file:
             jr nz, .psid
             ld bc, 0100h + SONG_ROW
             call gotoxy
+            ld hl, C_BLACK * 256 + C_YELLOW
+            call colors
             ld hl, s_rsid_no
             call prstr
+            ld hl, C_BLACK * 256 + C_GREEN
+            call colors
             ld hl, 6
             ret
 .psid:
@@ -398,7 +402,27 @@ play_file:
             call call_jsr
             jr .keys
 .irq:       call call_irq
-.keys:      ld a, (cia_dirty)       ; a zene átírta a CIA időzítőt
+.keys:      ld hl, (cps_cnt)        ; eltelt egy másodperc?
+            dec hl
+            ld (cps_cnt), hl
+            ld a, h
+            or l
+            jr nz, .nt
+            ld hl, (cps)
+            ld (cps_cnt), hl
+            ld hl, secs
+            inc (hl)
+            ld a, (hl)
+            cp 60
+            jr c, .sec
+            ld (hl), 0
+            ld hl, mins
+            ld a, (hl)
+            cp 99
+            jr nc, .sec
+            inc (hl)
+.sec:       call show_time          ; (a ROM-mal; a lejátszó kicsit később jön)
+.nt:        ld a, (cia_dirty)       ; a zene átírta a CIA időzítőt
             or a
             call nz, timer_update
             ld hl, key_cnt          ; ESC/SPACE minden 4., a dalválasztók minden
@@ -420,10 +444,10 @@ play_file:
             ld hl, songs
             cp (hl)
             jr z, .sok
-            jr nc, .frame
+            jp nc, .frame
 .sok:       ld hl, song
             cp (hl)
-            jr z, .frame
+            jp z, .frame
             ld (song_req), a
             call stop_all
 .krel:      halt                    ; megvárjuk, hogy elengedjék
@@ -581,7 +605,22 @@ timer_update:
 .m:
             call mul16              ; DEHL = HL * DE
             ex de, hl               ; HL = a felső szó
-.x:         ld c, 1                 ; IT-osztó: x / k <= 4090
+.x:         push hl                 ; hívás / mp = 195312,5 / x (az időhöz)
+            srl h
+            rr l
+            srl h
+            rr l
+            ld a, h
+            or l
+            jr nz, .x4
+            inc l
+.x4:        ex de, hl
+            ld bc, 48828
+            call div_bc_de
+            ld (cps), bc
+            ld (cps_cnt), bc
+            pop hl
+            ld c, 1                 ; IT-osztó: x / k <= 4090
 .k:         push hl
             push bc
             call div16
@@ -624,6 +663,21 @@ timer_update:
             in a, (P_TGRESET)
             out (P_ITCLR), a
             ei
+            ret
+
+; BC = BC / DE (16 bites, előjel nélkül), HL = maradék
+div_bc_de:  ld hl, 0
+            ld a, b
+            ld b, 16
+.l:         sli c
+            rla
+            adc hl, hl
+            sbc hl, de
+            jr nc, .n
+            add hl, de
+            dec c
+.n:         djnz .l
+            ld b, a
             ret
 
 ; DEHL = HL * DE (előjel nélkül)
@@ -1522,34 +1576,99 @@ SONG_ROW    equ 13
 INK_VAR     equ 0B4Dh           ; a ROM editor tinta- és papírszíne (palettaszám)
 PAPER_VAR   equ 0B4Eh
 
-draw_info:  call cls
-            ld hl, sidbuf + 16h     ; 1. sor: a név középen, inverz sávban
-            ld b, 32
-            call field_len
+PAL_LIST:   db 00h, 50h, 54h, 10h   ; lista: fekete, zöld, sárga, sötétzöld
+PAL_PLAY:   db 00h, 50h, 54h, 41h   ; lejátszás: fekete, zöld, sárga, kék
+C_BLACK     equ 0
+C_GREEN     equ 1
+C_YELLOW    equ 2
+C_BLUE      equ 3
+TIME_ROW    equ 16
+
+; HL -> a 4 palettaregiszter
+set_palette:
+            push bc
+            ld c, 60h
+            ld b, 4
+.p:         ld a, (hl)
+            out (c), a
+            inc hl
+            inc c
+            djnz .p
+            pop bc
+            ret
+; tinta: L, papír: H (palettaszámok)
+colors:     ld (INK_VAR), hl
+            ret
+; B oszlop, C sor -> kurzor; a színeket nem bántja
+at:         jp gotoxy
+
+draw_info:  ld hl, PAL_PLAY
+            call set_palette
+            ld hl, C_BLACK * 256 + C_GREEN
+            call colors
+            call cls
+            ; 1. sor: fejléc, kék sávban sárgával
             ld bc, 0101h
-            call gotoxy
+            call at
+            ld hl, C_BLUE * 256 + C_YELLOW
+            call colors
+            ld hl, s_head
+            call center
+            ; 3-5. sor: a zene neve sárgával, szerző és kiadás zölddel, középen
+            ld hl, C_BLACK * 256 + C_YELLOW
+            call colors
+            ld bc, 0103h
+            call at
             ld hl, sidbuf + 16h
-            call bar32
-            ld bc, 0103h            ; Szerző
-            call gotoxy
-            ld hl, s_author
-            call prstr
+            call center
+            ld hl, C_BLACK * 256 + C_GREEN
+            call colors
             ld bc, 0104h
-            call gotoxy
+            call at
             ld hl, sidbuf + 36h
-            call pr_field
-            ld bc, 0106h            ; Kiadva
-            call gotoxy
-            ld hl, s_rel
-            call prstr
-            ld bc, 0107h
-            call gotoxy
+            call center
+            ld bc, 0105h
+            call at
             ld hl, sidbuf + 56h
-            call pr_field
-            ld bc, 0109h            ; Betöltés: $xxxx-$yyyy
-            call gotoxy
+            call center
+            ; 7. sor: elválasztó (kék vonal)
+            ld hl, C_BLACK * 256 + C_BLUE
+            call colors
+            ld bc, 0107h
+            call at
+            ld hl, s_line
+            call center
+            ; 9-11. sor: típus, óra, cím (zöld címke, sárga érték)
+            ld bc, 0309h
+            call at
+            call label
+            ld hl, s_kind
+            call prstr
+            call value
+            ld de, entbuf           ; "PSID" a fejléc első 4 bájtjából
+            ld hl, sidbuf
+            ld bc, 4
+            ldir
+            xor a
+            ld (de), a
+            ld hl, entbuf
+            call prstr
+            ld bc, 030Ah
+            call at
+            call label
+            ld hl, s_clock
+            call prstr
+            call value
+            call clock_name
+            call prstr
+            ld bc, 030Bh
+            call at
+            call label
             ld hl, s_info
             call prstr
+            call value
+            ld c, '$'
+            call putc
             ld hl, (load_addr)
             call prhex
             ld hl, s_dash
@@ -1559,13 +1678,11 @@ draw_info:  call cls
             add hl, de
             dec hl
             call prhex
-            ld bc, 010Ah            ; Típus: PSID, PAL
-            call gotoxy
-            call print_kind
-            ld a, (sidbuf)          ; RSID-nél nincs dal-sáv és súgó
+            ld a, (sidbuf)          ; RSID: nincs dal-sáv, idő és súgó
             cp 'R'
-            ret z
-            ld de, entbuf           ; a dal-sáv: "Dal: 1 / 23" középen
+            jr z, .done
+            ; 13. sor: a dal, sárga sávban feketével: "DAL  3 / 23"
+            ld de, entbuf
             ld hl, s_song
             call copy_str
             ld a, (song)
@@ -1576,17 +1693,94 @@ draw_info:  call cls
             call put_dec
             xor a
             ld (de), a
+            ld hl, C_YELLOW * 256 + C_BLACK
+            call colors
+            ld bc, 0100h + SONG_ROW
+            call at
             ld hl, entbuf
+            call center
+            ; 16. sor: az idő
+            xor a
+            ld (secs), a
+            ld (mins), a
+            call show_time
+            ; 22-23. sor: súgó
+            ld hl, C_BLACK * 256 + C_GREEN
+            call colors
+            ld bc, 0116h
+            call at
+            ld hl, s_keys
+            call prstr
+.done:      ld hl, C_BLACK * 256 + C_GREEN
+            jp colors
+label:      ld hl, C_BLACK * 256 + C_GREEN
+            jp colors
+value:      ld hl, C_BLACK * 256 + C_YELLOW
+            jp colors
+
+; az eltelt idő a TIME_ROW. sorba, középre: "Idő:  1:23" (sárga)
+show_time:  ld hl, C_BLACK * 256 + C_GREEN
+            call colors
+            ld bc, 0B00h + TIME_ROW
+            call at
+            ld hl, s_time
+            call prstr
+            ld hl, C_BLACK * 256 + C_YELLOW
+            call colors
+            ld a, (mins)
+            call pr2
+            ld c, ':'
+            call putc
+            ld a, (secs)
+            call pr2
+            ld hl, C_BLACK * 256 + C_GREEN
+            jp colors
+; A (0..99) két jeggyel
+pr2:        ld b, '0' - 1
+.t:         inc b
+            sub 10
+            jr nc, .t
+            add a, '0' + 10
+            push af
+            ld c, b
+            call putc
+            pop af
+            ld c, a
+            jp putc
+
+; HL = az órajel neve a fejléc szerint
+clock_name: xor a                   ; v2+ fejléc: a $77. bájt 2-3. bitje
+            ld b, a
+            ld a, (sidbuf + 5)
+            cp 2
+            jr c, .k
+            ld a, (sidbuf + 7)
+            cp 7Ch
+            jr c, .k
+            ld a, (sidbuf + 77h)
+            rrca
+            rrca
+            and 3
+            ld b, a
+.k:         ld a, b
+            add a, a
+            ld e, a
+            ld d, 0
+            ld hl, clock_names
+            add hl, de
+            ld a, (hl)
+            inc hl
+            ld h, (hl)
+            ld l, a
+            ret
+
+; a HL-en kezdődő szöveg (0-ig, legfeljebb 32) középre igazítva, 32 oszlopon,
+; az aktuális színekkel (a papírszín a sáv)
+center:     push hl
             ld b, 32
             call field_len
-            ld bc, 0100h + SONG_ROW
-            call gotoxy
-            ld hl, entbuf
-            call bar32
-            ld bc, 0116h            ; súgó a 22-23. sorban
-            call gotoxy
-            ld hl, s_keys
-            jp prstr
+            pop hl
+            jp bar32
 
 ; A = a HL-en kezdődő név hossza (0-ig, legfeljebb B)
 field_len:  ld c, 0
@@ -1606,7 +1800,6 @@ bar32:      push hl
             sub b
             srl a                   ; bal oldali szóközök
             ld b, a
-            call inverse
             pop hl
             ld e, 0                 ; E = kiírt karakterek
 .p:         ld a, b
@@ -1636,7 +1829,7 @@ bar32:      push hl
             call putc
             inc e
             jr .f
-.d:         jp inverse              ; vissza normálba
+.d:         ret
 
 ; PSID szövegmező (HL, legfeljebb 32 karakter, 0-ig) kiírása
 pr_field:   ld b, 32
@@ -1651,9 +1844,13 @@ pr_field:   ld b, 32
             ret
 
 ; A -> kiírható karakter (a vezérlőkódok és a 7Fh fölöttiek helyett '?')
-printable:  cp 20h
+printable:  cp 20h                  ; (a TVC ékezetes betűi, $80-$98, maradnak)
             jr c, .q
             cp 7Fh
+            ret c
+            cp 80h
+            jr c, .q
+            cp 99h
             ret c
 .q:         ld a, '?'
             ret
@@ -1709,46 +1906,6 @@ put_dec:    push de
             pop de
             jp copy_str
 
-; a fejléc típusa (PSID/RSID) és órajele (PAL, NTSC, mindkettő, ismeretlen)
-print_kind: ld hl, s_kind
-            call prstr
-            ld b, 4
-            ld hl, sidbuf
-.t:         ld c, (hl)
-            push hl
-            push bc
-            rst 30h
-            db 21h
-            pop bc
-            pop hl
-            inc hl
-            djnz .t
-            ld hl, s_comma
-            call prstr
-            xor a                   ; v2+ fejléc: a $77. bájt 2-3. bitje
-            ld b, a
-            ld a, (sidbuf + 5)
-            cp 2
-            jr c, .k
-            ld a, (sidbuf + 7)
-            cp 7Ch
-            jr c, .k
-            ld a, (sidbuf + 77h)
-            rrca
-            rrca
-            and 3
-            ld b, a
-.k:         ld a, b
-            add a, a
-            ld e, a
-            ld d, 0
-            ld hl, clock_names
-            add hl, de
-            ld a, (hl)
-            inc hl
-            ld h, (hl)
-            ld l, a
-            jp prstr
 clock_names: dw s_clk0, s_clk1, s_clk2, s_clk3
 
 ; A = a kurzor lapjának első eleme
@@ -1789,7 +1946,11 @@ draw_mark:  ld hl, top
             db 21h
             ret
 
-draw_all:   call cls
+draw_all:   ld hl, PAL_LIST
+            call set_palette
+            ld hl, C_BLACK * 256 + C_GREEN
+            call colors
+            call cls
             ld hl, s_title
             call prstr
             ld a, REG_DRIVE
@@ -1918,7 +2079,7 @@ set_ink:    cp 2
 V_MODE      equ 0B73h           ; a video üzemmód (0: 2, 1: 4, 2: 16 színű)
 V_BORDER    equ 0B4Fh
 P_BORDER    equ 00h
-PALETTE     db 00h, 50h, 44h, 10h   ; I G R B a 6., 4., 2., 0. biten
+
 screen_on:  ld a, (V_MODE)
             ld (orig_mode), a
             ld hl, (INK_VAR)        ; tinta, papír
@@ -1928,14 +2089,8 @@ screen_on:  ld a, (V_MODE)
             ld c, 1                 ; VIDEO VID-MODE: 4 színű mód (törli is)
             rst 30h
             db 04h
-            ld hl, PALETTE
-            ld c, 60h
-            ld b, 4
-.p:         ld a, (hl)
-            out (c), a
-            inc hl
-            inc c
-            djnz .p
+            ld hl, PAL_LIST         ; I G R B a 6., 4., 2., 0. biten
+            call set_palette
             ld hl, 0001h            ; tinta 1, papír 0
             ld (INK_VAR), hl
             ld a, 1
@@ -2402,6 +2557,10 @@ draw_i:     db 0
 draw_row:   db 0
 draw_dir:   db 0
 norm_ink:   db 1
+cps:        dw 50
+cps_cnt:    dw 50
+secs:       db 0
+mins:       db 0
 orig_mode:  db 1
 orig_ink:   dw 0001h
 orig_border: db 0

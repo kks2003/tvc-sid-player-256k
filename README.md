@@ -33,8 +33,11 @@ Lejátszás közben:
 - **jobbra / balra nyíl**: a következő / előző dal,
 - **ESC** vagy **SPACE**: vissza a fájlválasztóhoz.
 
-A zene indulásakor kiírja a típusát és az órajelét is (PAL, NTSC,
-PAL/NTSC vagy ismeretlen). RSID zenét nem indít el: ezek teljes C64-et
+Lejátszás közben színes adatlap látszik: fejléc, a zene neve, szerzője és
+kiadása, típusa, órajele (PAL, NTSC, PAL/NTSC vagy ismeretlen) és címe, a
+dal sorszáma kiemelt sávban, és az eltelt idő (másodpercenként frissül). A
+lista és az adatlap saját palettát használ, induláskor 4 színű módba vált,
+kilépéskor az eredeti mód és színek visszaállnak. RSID zenét nem indít el: ezek teljes C64-et
 várnak (megszakítások, digi), ezt kiírja, és egy gombnyomásra vissza a
 listához. A szövegek magyarul, ékezetes betűkkel jelennek meg
 (`tools/gen_strings.py` készíti a TVC-kódolású `strings.inc`-et).
