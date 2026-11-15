@@ -456,7 +456,7 @@ play_file:
             call read_keys
             cp KEYMASK
             jr nz, .esc
-            call read_song_key      ; számok, fel/le: dal; balra/jobbra: fájl
+            call read_song_key      ; számok, balra/jobbra: dal; fel/le: fájl
             inc b
             dec b
             jr nz, .fsw
@@ -477,7 +477,7 @@ play_file:
             jr nz, .krel
             ld hl, 5
             ret
-.fsw:       ld a, b                 ; másik fájl: a lista szerint (a menü nélkül)
+.fsw:       ld a, b                 ; fel/le: másik fájl a lista szerint (menü nélkül)
             ld (file_dir), a
             call stop_all
 .frel:      halt                    ; megvárjuk, hogy elengedjék
@@ -753,16 +753,16 @@ read_song_key:
             and e
             ld e, a                 ; E: 0 = lenyomva
             ld b, 1
-            bit 5, e                ; jobbra: következő fájl
+            bit 2, e                ; le: következő fájl
             jr z, .file
             ld b, 0FFh
-            bit 6, e                ; balra: előző fájl
+            bit 1, e                ; fel: előző fájl
             jr z, .file
             ld b, 0
             ld a, (song)
-            bit 2, e                ; le: következő dal
+            bit 5, e                ; jobbra: következő dal
             jr z, .next
-            bit 1, e                ; fel: előző dal
+            bit 6, e                ; balra: előző dal
             jr z, .prev
             xor a
             ret
@@ -1584,7 +1584,7 @@ browser:    xor a
             xor a
             ld (switching), a
             ld a, l
-            cp 7                    ; balra/jobbra lejátszás közben: másik fájl
+            cp 7                    ; fel/le lejátszás közben: másik fájl
             jr z, .nextf
             or a
             jp z, .rescan

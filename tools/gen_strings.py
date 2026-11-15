@@ -43,7 +43,7 @@ STRINGS = [   # (címke, szöveg); a "\r\n" sorvége 13, 10
     ("s_multi1", "Ez a zene "),
     ("s_multi2", " SID-es, a kártyán" + CR + "csak egy SID van: ezt nem" + CR +
                  "tudom lejátszani." + CR),
-    ("s_keys", "1-9,0, fel/le: dal  <- ->: fájl" + CR +
+    ("s_keys", "1-9,0, <- ->: dal  fel/le: fájl" + CR +
                "ESC/SPACE: vissza a listához"),
 ]
 
