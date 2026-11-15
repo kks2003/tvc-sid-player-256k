@@ -5,7 +5,8 @@
     python3 tools/gen_strings.py --title "szöveg" build/title.bin   (a BASIC PRINT sora)
 
 A TVC karakterkészletében az ékezetes nagybetűk $80-$88, a kisbetűk
-$90-$98 (Á É Í Ó Ö Ő Ú Ü Ű sorrendben). A sorok legfeljebb 32 karakteresek.
+$90-$98 (Á É Í Ó Ö Ő Ú Ü Ű sorrendben). A sorok legfeljebb 31 karakteresek (a 32. oszlop után az editor
+új sort szúrhat be).
 """
 import sys
 
@@ -28,7 +29,7 @@ STRINGS = [   # (címke, szöveg); a "\r\n" sorvége 13, 10
     ("s_clock", "Óra:   "),
     ("s_time", "Idő:  "),
     ("s_head", "SID-LEJÁTSZÓ  *  TVC256k++"),
-    ("s_line", "-" * 30),
+    ("s_line", "-" * 29),
     ("s_clk0", "ismeretlen (PAL)"),
     ("s_title", "SID-lejátszó - TVC256k++  "),
     ("s_help", "Enter/tűz:indít D:megh. ESC:ki"),
@@ -69,7 +70,7 @@ def main():
     print("; a lejátszó szövegei TVC-kódolásban (ékezetes betűk: $80-$88, $90-$98)")
     for label, text in STRINGS:
         for line in text.split(CR):
-            if len(line) > 32:
+            if len(line) > 31:     # a 32. oszlop után az editor új sort szúr be
                 sys.exit("túl hosszú sor (%d): %s" % (len(line), line))
         b = encode(text) + [0]
         print("%-11s db %s" % (label + ":", ", ".join("%d" % x for x in b)))

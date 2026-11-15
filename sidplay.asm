@@ -1570,12 +1570,15 @@ browser:    xor a
             xor a
             ld (song_req), a
             ld (switching), a
-.load:      ld a, (switching)       ; dalváltáskor a kép marad
-            or a
+.load:      ld a, (switching)       ; dal- és fájlváltáskor a kép marad
+            ld hl, fswitch
+            or (hl)
             call z, cls
             call load_file
             jr c, .err
             call play_file
+            xor a
+            ld (fswitch), a
             ld a, l
             cp 5                    ; dalváltás: újra beolvassuk a fájlt
             ld a, 1
@@ -1616,8 +1619,12 @@ browser:    xor a
             call set_name
             xor a
             ld (song_req), a
+            inc a
+            ld (fswitch), a         ; a kép marad, csak a változó sorok
             jp .load
-.err:       ld hl, s_anykey         ; hiba: az üzenet a képernyőn marad
+.err:       xor a
+            ld (fswitch), a
+            ld hl, s_anykey         ; hiba: az üzenet a képernyőn marad
             call prstr
 .wr:        halt                    ; előbb minden gomb fel (pl. az Enter)
             call any_key
@@ -1695,6 +1702,9 @@ draw_info:  ld hl, PAL_PLAY
             call set_palette
             ld hl, C_BLACK * 256 + C_GREEN
             call colors
+            ld a, (fswitch)         ; fájlváltás lejátszás közben: a kép marad,
+            or a                    ; csak a változó sorok íródnak át
+            jr nz, .part
             call cls
             ; 1. sor: fejléc, kék sávban sárgával
             ld bc, 0101h
@@ -1703,6 +1713,31 @@ draw_info:  ld hl, PAL_PLAY
             call colors
             ld hl, s_head
             call center
+            ; 7. sor: elválasztó (kék vonal)
+            ld hl, C_BLACK * 256 + C_BLUE
+            call colors
+            ld bc, 0107h
+            call at
+            ld hl, s_line
+            call center
+            jr .body
+.part:      ld c, 9                 ; típus, óra, cím: a régi érték lehetett hosszabb
+            call clear_row
+            ld c, 10
+            call clear_row
+            ld c, 11
+            call clear_row
+            call unplayable         ; nem lejátszható: az alsó rész is törlődik
+            jr z, .body
+            ld c, SONG_ROW
+.cl:        push bc
+            call clear_row
+            pop bc
+            inc c
+            ld a, c
+            cp 24
+            jr c, .cl
+.body:
             ; 3-5. sor: a zene neve sárgával, szerző és kiadás zölddel, középen
             ld hl, C_BLACK * 256 + C_YELLOW
             call colors
@@ -1719,13 +1754,6 @@ draw_info:  ld hl, PAL_PLAY
             ld bc, 0105h
             call at
             ld hl, sidbuf + 56h
-            call center
-            ; 7. sor: elválasztó (kék vonal)
-            ld hl, C_BLACK * 256 + C_BLUE
-            call colors
-            ld bc, 0107h
-            call at
-            ld hl, s_line
             call center
             ; 9-11. sor: típus, óra, cím (zöld címke, sárga érték)
             ld bc, 0309h
@@ -1779,12 +1807,8 @@ draw_info:  ld hl, PAL_PLAY
             add hl, de
             dec hl
             call prhex
-            ld a, (sidbuf)          ; RSID vagy több SID: nincs dal-sáv, idő, súgó
-            cp 'R'
-            jr z, .done
-            call sid_count
-            cp 2
-            jr nc, .done
+            call unplayable         ; RSID vagy több SID: nincs dal-sáv, idő, súgó
+            jr nz, .done
             call draw_song
             ; 22-23. sor: súgó
             ld hl, C_BLACK * 256 + C_GREEN
@@ -1795,6 +1819,29 @@ draw_info:  ld hl, PAL_PLAY
             call prstr
 .done:      ld hl, C_BLACK * 256 + C_GREEN
             jp colors
+
+; Z = 0, ha a zene nem lejátszható (RSID, vagy 2-3 SID)
+unplayable: ld a, (sidbuf)
+            cp 'R'
+            jr z, .no
+            call sid_count
+            cp 2
+            jr nc, .no
+            xor a
+            ret
+.no:        or 1
+            ret
+
+; a C. sor törlése (32 szóköz, fekete papír)
+clear_row:  ld b, 1
+            call at
+            ld hl, C_BLACK * 256 + C_GREEN
+            call colors
+            ld b, LINE_W
+.l:         ld c, ' '
+            call putc
+            djnz .l
+            ret
 
 ; a dal-sáv (13. sor) és az idő (16. sor, nullázva)
 draw_song:  ld de, entbuf           ; "DAL  3 / 23" sárga sávban feketével
@@ -1911,7 +1958,7 @@ clock_name: xor a                   ; v2+ fejléc: a $77. bájt 2-3. bitje
 ; a HL-en kezdődő szöveg (0-ig, legfeljebb 32) középre igazítva, 32 oszlopon,
 ; az aktuális színekkel (a papírszín a sáv)
 center:     push hl
-            ld b, 32
+            ld b, LINE_W
             call field_len
             pop hl
             jp bar32
@@ -1927,10 +1974,15 @@ field_len:  ld c, 0
 .e:         ld a, c
             ret
 
-; A hosszú szöveg (HL) középre igazítva, inverz, 32 oszlopos sávban
+; A sorok legfeljebb LINE_W (31) karakteresek: a ROM editora a 32. oszlop
+; után a következő sort a sor folytatásának veszi, és ha az nem üres, új sort
+; szúr be (eltolja a képet).
+LINE_W      equ 31
+
+; A hosszú szöveg (HL) középre igazítva, LINE_W széles sávban (a színeket a hívó állítja)
 bar32:      push hl
             ld b, a
-            ld a, 32
+            ld a, LINE_W
             sub b
             srl a                   ; bal oldali szóközök
             ld b, a
@@ -1945,7 +1997,7 @@ bar32:      push hl
             dec b
             jr .p
 .s:         ld a, e
-            cp 32
+            cp LINE_W
             jr nc, .f
             ld a, (hl)
             or a
@@ -1957,7 +2009,7 @@ bar32:      push hl
             inc e
             jr .s
 .f:         ld a, e                 ; jobb oldal: szóközök a sáv végéig
-            cp 32
+            cp LINE_W
             jr nc, .d
             ld c, ' '
             call putc
@@ -1966,7 +2018,7 @@ bar32:      push hl
 .d:         ret
 
 ; PSID szövegmező (HL, legfeljebb 32 karakter, 0-ig) kiírása
-pr_field:   ld b, 32
+pr_field:   ld b, LINE_W
 .l:         ld a, (hl)
             or a
             ret z
@@ -2706,6 +2758,7 @@ draw_dir:   db 0
 norm_ink:   db 1
 switching:  db 0
 file_dir:   db 1
+fswitch:    db 0
 cps:        dw 50
 cps_cnt:    dw 50
 secs:       db 0
