@@ -456,7 +456,10 @@ play_file:
             call read_keys
             cp KEYMASK
             jr nz, .esc
-            call read_song_key      ; számbillentyű / nyilak: másik dal
+            call read_song_key      ; számok, fel/le: dal; balra/jobbra: fájl
+            inc b
+            dec b
+            jr nz, .fsw
             or a
             jp z, .frame
             ld hl, songs
@@ -473,6 +476,16 @@ play_file:
             or a
             jr nz, .krel
             ld hl, 5
+            ret
+.fsw:       ld a, b                 ; másik fájl: a lista szerint (a menü nélkül)
+            ld (file_dir), a
+            call stop_all
+.frel:      halt                    ; megvárjuk, hogy elengedjék
+            call read_song_key
+            inc b
+            dec b
+            jr nz, .frel
+            ld hl, 7
             ret
 .esc:       call stop_all
 .rel:       halt                    ; megvárjuk, hogy elengedjék
@@ -717,30 +730,47 @@ mul16:      ld b, h
 
 ; A = a lenyomott dalválasztó billentyű szerinti dal (0: nincs):
 ; 1-9, 0 = 10. dal, jobbra/balra nyíl: következő/előző
+; ki: A = a kért dal (0: nincs), B = fájlváltás (1 következő, FFh előző, 0 nincs)
 read_song_key:
             ld c, 0
             call read_row
             ld hl, row0map
             call .scan
-            ret nz
+            jr nz, .dig
             ld c, 1
             call read_row
             ld hl, row1map
             call .scan
-            ret nz
-            ld c, 8
+            jr z, .arr
+.dig:       ld b, 0
+            ret
+.arr:
+            ld c, 8                 ; kurzornyilak és 1. joystick
             call read_row
-            ld b, a
+            ld e, a
+            ld c, 9                 ; 2. joystick
+            call read_row
+            and e
+            ld e, a                 ; E: 0 = lenyomva
+            ld b, 1
+            bit 5, e                ; jobbra: következő fájl
+            jr z, .file
+            ld b, 0FFh
+            bit 6, e                ; balra: előző fájl
+            jr z, .file
+            ld b, 0
             ld a, (song)
-            bit 5, b                ; jobbra
+            bit 2, e                ; le: következő dal
             jr z, .next
-            bit 6, b                ; balra
+            bit 1, e                ; fel: előző dal
             jr z, .prev
             xor a
             ret
 .next:      inc a
             ret
 .prev:      dec a
+            ret
+.file:      xor a
             ret
 .scan:      cpl
             ld b, 8
@@ -1553,8 +1583,40 @@ browser:    xor a
             jr z, .load
             xor a
             ld (switching), a
-            or l
+            ld a, l
+            cp 7                    ; balra/jobbra lejátszás közben: másik fájl
+            jr z, .nextf
+            or a
             jp z, .rescan
+            jr .err
+.nextf:     call scan_dir           ; (a lista helyére töltődött a zene)
+            ld a, (ent_count)
+            ld c, a
+            ld b, a                 ; legfeljebb ennyi lépés
+.nf:        ld a, (file_dir)
+            ld e, a
+            ld a, (cur)
+            add a, e
+            cp c                    ; a lista végén / elején körbe
+            jr c, .in
+            ld a, e
+            cp 1
+            ld a, 0
+            jr z, .in
+            ld a, c
+            dec a
+.in:        ld (cur), a
+            call cur_entry
+            ld a, (hl)              ; 0: PSID (a könyvtár, RSID, ? kimarad)
+            or a
+            jr z, .found
+            djnz .nf
+            jp .rescan
+.found:     inc hl
+            call set_name
+            xor a
+            ld (song_req), a
+            jp .load
 .err:       ld hl, s_anykey         ; hiba: az üzenet a képernyőn marad
             call prstr
 .wr:        halt                    ; előbb minden gomb fel (pl. az Enter)
@@ -2643,6 +2705,7 @@ draw_row:   db 0
 draw_dir:   db 0
 norm_ink:   db 1
 switching:  db 0
+file_dir:   db 1
 cps:        dw 50
 cps_cnt:    dw 50
 secs:       db 0

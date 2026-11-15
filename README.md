@@ -34,7 +34,9 @@ ezt a fájl első 4 bájtjából olvassa):
 Lejátszás közben:
 
 - **1-9**, **0**: az 1-9., illetve a 10. dal,
-- **jobbra / balra nyíl**: a következő / előző dal,
+- **fel / le** (nyíl vagy joystick): az előző / következő dal,
+- **balra / jobbra** (nyíl vagy joystick): az előző / következő fájl a lista
+  szerint, körbe, a menü nélkül (csak a lejátszható PSID-ekre lép),
 - **ESC** vagy **SPACE**: vissza a fájlválasztóhoz.
 
 Lejátszás közben színes adatlap látszik: fejléc, a zene neve, szerzője és
